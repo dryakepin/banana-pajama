@@ -1,0 +1,4 @@
+# PostgreSQL database files will go here
+# - migrations/
+# - seeds/
+# - schema.sql

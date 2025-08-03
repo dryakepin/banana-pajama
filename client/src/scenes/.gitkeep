@@ -1,0 +1,4 @@
+# Game scenes will go here
+# - GameScene.js (main gameplay)
+# - MenuScene.js (main menu)
+# - GameOverScene.js (game over screen)

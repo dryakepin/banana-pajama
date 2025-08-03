@@ -1,0 +1,6 @@
+# Sprite classes will go here
+# - Player.js (banana character)
+# - BasicZombie.js
+# - TankZombie.js
+# - FastZombie.js
+# - Bullet.js

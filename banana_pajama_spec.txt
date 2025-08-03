@@ -1,0 +1,259 @@
+# Banana Pajama Zombie Shooter - Spillspecifikation
+
+## Overordnet Koncept
+Et top-down zombie survival spil hvor spilleren kontrollerer en banan i pyjamas der skyder zombier i en storby. Spillet skal køre på både laptop og mobil. **Stemningen er dyster og mørk** med uhyggelig atmosfære.
+
+## Spillerkarakter
+- **Udseende**: En gul banan iført pyjamas (blå/stribet mønster)
+- **Våben**: En stor skyder/pistol som affyres automatisk eller ved klik/tryk
+- **Bevægelse**: 360-graders bevægelse i top-down perspektiv
+- **Størrelse**: Ca. 32x48 pixels for optimal visning på begge platforme
+
+## Spilleverdenen
+- **Setting**: Moderne storby med skyskrabere
+- **Stemning**: Dyster og mørk atmosfære
+- **Kameravinkel**: Top-down/isometrisk view som Vampire Survivors
+- **Miljø**: 
+  - Gader med fortove i mørke/dæmpede farver
+  - Bygninger man kan gå omkring (ikke ind i) - mørke silhuetter
+  - Måske parkområder eller åbne pladser med dystert lys
+  - Tekstur-baseret baggrund for at spare performance
+- **Belysning**: Dæmpet/skummel belysning, måske gadelygter der kaster skygger
+- **Farvepalet**: Mørke grå-, blå- og grønnetoner med kontraster
+
+## Zombier (Fjender)
+
+### Zombie Typer:
+1. **Grundzombie** (Grøn)
+   - Liv: 1 skud
+   - Skade: 10 HP
+   - Hastighed: Langsom
+   - Spawn rate: Høj
+
+2. **Tank Zombie** (Mørk grøn/grå)
+   - Liv: 3-5 skud
+   - Skade: 25 HP
+   - Hastighed: Meget langsom
+   - Spawn rate: Lav
+
+3. **Hurtig Zombie** (Lysegrøn)
+   - Liv: 1 skud
+   - Skade: 15 HP
+   - Hastighed: Hurtig
+   - Spawn rate: Medium
+
+### Zombie Adfærd:
+- Følger altid efter spilleren (pathfinding)
+- Spawner fra skærmens kanter
+- Øget spawn rate over tid
+- Zombier skal navigere omkring bygninger
+
+## Spillemekanik
+
+### Kontroller:
+**Laptop/Desktop:**
+- WASD eller piletaster: Bevægelse
+- Mus: Sigte og skyde (automatisk skydning mod muspil)
+- Eller: Automatisk skydning mod nærmeste zombie
+
+**Mobil:**
+- Virtual joystick til bevægelse (venstre side)
+- Automatisk skydning mod nærmeste zombie
+- Alternativt: Tap for at sigte og skyde
+
+### Spillerens Sundhed:
+- Starter med 100 HP
+- HP vises som en bar øverst på skærmen
+- Ved 0 HP: "Game Over" - bananen bliver til banana split (animation)
+- Ingen sundhedsgenoprettelse (hardcore survival)
+
+### Scoring:
+- Point for hver dræbt zombie:
+  - Grundzombie: 10 point
+  - Tank Zombie: 50 point
+  - Hurtig Zombie: 25 point
+- Bonus point for overlevelsestid (1 point per sekund)
+- Score vises øverst på skærmen
+
+## UI/HUD Design
+
+### In-Game HUD:
+```
+[HP: ████████░░] [Score: 1,250] [Time: 02:34]
+```
+
+- **HP Bar**: Rød/grøn gradient bar (øverst venstre)
+- **Score**: Numerisk display (øverst midt)
+- **Timer**: MM:SS format (øverst højre)
+- **Mobile tilpasning**: Større ikoner og tekst
+
+### Menu System:
+
+#### Hovedmenu:
+- **Titel**: "Banana Pajama Zombie Shooter" med grafik
+- **Knapper**:
+  - "New Game"
+  - "High Scores"
+  - "Exit" (kun desktop)
+- **High Score liste**: Top 10 spillere med navn og score
+
+#### Game Over Skærm:
+- "Game Over" tekst med banana split animation
+- Din score og overlevelsestid
+- Input felt for navn (hvis top 10)
+- Knapper: "Try Again", "Main Menu"
+
+## Lyddesign og Atmosfære
+
+### Baggrunds Musik:
+- **Stil**: Ambient, uhyggelig og atmosfærisk
+- **Tempo**: Langsom og dyster
+- **Instrumenter**: Synthesizere, mørke pads, sparsomme perkussion
+- **Loop**: Kontinuerlig musik der ikke distraherer fra gameplay
+- **Volume**: Lav nok til at andre lyde kan høres tydeligt
+
+### Lydeffekter:
+- **Pistolskud**: Kraftig, skarp lyd med muligt ekko
+- **Zombie spawn**: Knasende/knagende lyd som chips der knuses med hammer
+- **Zombie død**: Våde, organiske knase-lyde
+- **Spillerens død**: Dramatisk uhyggelig akkord/sting
+- **Footsteps**: Subtile fodtrin på asfalt (spilleren)
+- **Ambient lyde**: Vind, fjerne bylyde for at forstærke atmosfæren
+
+### Audio Implementation:
+- **3D Audio**: Lyde bliver svagere med afstand (især zombie spawns)
+- **Layering**: Flere lydeffekter kan spille samtidigt
+- **Volume kontrol**: Mulighed for at justere musik vs. lydeffekter
+
+## Tekniske Specifikationer
+
+### Frontend Stack:
+- **Spilmotor**: Phaser.js 3 (gratis, open source HTML5 game framework)
+- **Platform**: HTML5 Canvas med cross-platform support
+- **Responsive design**: Tilpasser sig skærmstørrelse (desktop + mobil)
+- **Touch support**: Virtual kontroller på mobil via Phaser input system
+- **Performance**: 60 FPS på begge platforme
+- **Audio support**: Phaser Audio System med Web Audio API
+- **PWA**: Progressive Web App funktionalitet for mobile installation
+
+### Backend Stack:
+- **Server**: Node.js med Express.js framework
+- **Database**: PostgreSQL (robust, gratis, skalerbar)
+- **Web Proxy**: Nginx (reverse proxy, static file serving, SSL)
+- **Authentication**: Simple session-based (for high scores)
+
+### Deployment Arkitektur:
+
+#### Lokal Udvikling (MacBook Pro):
+- **Docker Desktop**: Containeriseret udviklingmiljø
+- **Homebrew**: Package management (Node.js, PostgreSQL, Nginx)
+- **VS Code**: Udviklings IDE
+- **Git**: Version control
+
+#### Cloud Deployment (AWS):
+- **Compute**: AWS EC2 t3.micro (gratis tier)
+- **Database**: AWS RDS PostgreSQL (gratis tier)
+- **Static Assets**: AWS S3 + CloudFront CDN
+- **Load Balancer**: AWS Application Load Balancer eller Nginx
+- **Monitoring**: AWS CloudWatch
+
+### Projektstruktur:
+```
+banana-zombie-shooter/
+├── client/                 # Phaser.js spil
+│   ├── src/scenes/        # Game, Menu, GameOver scener
+│   ├── src/sprites/       # Banan, Zombie klasser
+│   ├── assets/            # Billeder, lyde, fonts
+│   └── dist/              # Built game files
+├── server/                # Node.js Express API
+│   ├── routes/api.js      # High score endpoints
+│   ├── models/            # Database modeller
+│   └── middleware/        # CORS, logging
+├── database/              # PostgreSQL migrations
+├── docker/                # Docker configuration
+└── infrastructure/        # AWS deployment scripts
+```
+
+### Asset Behov:
+- **Sprites**: Banan karakter, zombier, våben, baggrund tiles (mørke/dystre farver)
+  - Format: PNG med alpha transparency
+  - Størrelse: Optimeret til både desktop og mobil (32x32 til 64x64 pixels)
+- **Animationer**: Gang, skydning, død, banana split transformation
+  - Format: Sprite sheets eller individuelle frames
+- **Lyde**: 
+  - **Baggrunds musik**: Ambient, uhyggelig atmosfære (OGG/MP3, looped)
+  - **Skudlyde**: Kraftige pistolskud med ekko (WAV/OGG)
+  - **Zombie spawn lyd**: Knasende lyd som chips der knuses med hammer
+  - **Zombie dødslyde**: Våde/knasende lyde
+  - **Game over lyd**: Dramatisk/uhyggelig akkord
+- **UI elementer**: Knapper, HP bar, font til score/timer (mørkt tema)
+- **Asset Hosting**: AWS S3 + CloudFront for hurtig global distribution
+
+### Data Lagring:
+- **High Scores**: PostgreSQL database (AWS RDS)
+- **Game Sessions**: Database logging (optional analytics)
+- **Client Cache**: Browser LocalStorage for settings/preferences
+- **Static Assets**: AWS S3 med CloudFront CDN distribution
+
+### API Design:
+```javascript
+// High Score Endpoints
+GET  /api/highscores          // Hent top 10 spillere
+POST /api/highscores          // Submit ny high score
+{
+  "player_name": "string",
+  "score": "number", 
+  "survival_time": "number"
+}
+
+// Game Analytics (optional)
+POST /api/sessions/start      // Start game session
+POST /api/sessions/end        // Log game completion
+```
+
+### Database Schema:
+```sql
+-- High Scores tabel
+CREATE TABLE high_scores (
+    id SERIAL PRIMARY KEY,
+    player_name VARCHAR(50) NOT NULL,
+    score INTEGER NOT NULL,
+    survival_time INTEGER NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Game Sessions tabel (analytics)
+CREATE TABLE game_sessions (
+    id SERIAL PRIMARY KEY,
+    session_id UUID DEFAULT gen_random_uuid(),
+    start_time TIMESTAMP DEFAULT NOW(),
+    end_time TIMESTAMP,
+    final_score INTEGER,
+    zombies_killed INTEGER
+);
+```
+
+## Progression og Sværhedsgrad
+- **Zombie spawn rate** øges over tid
+- **Flere zombie typer** introduceres gradvist
+- **Hastighed** af zombier øges langsomt
+- Mål: Skabe progressiv udfordring uden at blive unfair
+
+## Performance Overvejelser
+- **Sprite pooling** for zombier (genbruge objekter i Phaser)
+- **Culling**: Kun render zombier på skærmen (Phaser Camera bounds)
+- **Begræns zombie antal** (f.eks. max 50 samtidigt)
+- **Asset optimization**: Komprimerede billeder og lyde via CloudFront CDN
+- **Progressive loading**: Critical assets først, resten bagefter
+- **Memory management**: Phaser's indbyggede garbage collection optimering
+- **Database queries**: Indexerede high score queries for hurtig respons
+
+## Udvidelses Muligheder
+- **Power-ups** (hurtigere skydning, stærkere våben)
+- **Forskellige våben typer** med unikke lydeffekter
+- **Boss zombier** med specielle spawn lyde
+- **Multiplayer mode** via WebSockets (Node.js + Socket.io)
+- **Achievements/unlocks** gemt i database
+- **Global leaderboards** på tværs af alle spillere
+- **Social features**: Del high scores på sociale medier
+- **Analytics dashboard**: Spil statistikker via AWS CloudWatch

@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Banana Pajama Zombie Shooter</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #1a1a1a;
+            color: #ffffff;
+            font-family: 'Courier New', monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        
+        #game-container {
+            border: 2px solid #333;
+            border-radius: 8px;
+            background-color: #000;
+        }
+        
+        canvas {
+            display: block;
+            border-radius: 6px;
+        }
+        
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1000;
+            text-align: center;
+        }
+        
+        .loading h1 {
+            color: #ffff00;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            margin-bottom: 20px;
+        }
+        
+        .loading-bar {
+            width: 300px;
+            height: 20px;
+            background-color: #333;
+            border: 2px solid #666;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        .loading-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff4444, #ffff44, #44ff44);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div class="loading" id="loading-screen">
+            <h1>Banana Pajama Zombie Shooter</h1>
+            <div class="loading-bar">
+                <div class="loading-fill" id="loading-fill"></div>
+            </div>
+            <p>Loading...</p>
+        </div>
+    </div>
+</body>
+</html>

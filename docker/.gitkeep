@@ -1,0 +1,4 @@
+# Docker configuration files will go here
+# - Dockerfile
+# - docker-compose.yml
+# - docker-compose.dev.yml

@@ -1,0 +1,31 @@
+{
+  "name": "banana-pajama-client",
+  "version": "1.0.0",
+  "description": "Banana Pajama Zombie Shooter - Frontend Game Client",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "webpack serve --mode development",
+    "build": "webpack --mode production",
+    "start": "webpack serve --mode development --open",
+    "lint": "eslint src/",
+    "test": "jest"
+  },
+  "dependencies": {
+    "phaser": "^3.80.1"
+  },
+  "devDependencies": {
+    "webpack": "^5.88.0",
+    "webpack-cli": "^5.1.4",
+    "webpack-dev-server": "^4.15.1",
+    "html-webpack-plugin": "^5.5.3",
+    "copy-webpack-plugin": "^11.0.0",
+    "css-loader": "^6.8.1",
+    "style-loader": "^3.3.3",
+    "file-loader": "^6.2.0",
+    "eslint": "^8.44.0",
+    "jest": "^29.6.1"
+  },
+  "keywords": ["game", "phaser", "zombie", "shooter", "html5"],
+  "author": "Banana Pajama Dev Team",
+  "license": "MIT"
+}

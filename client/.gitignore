@@ -1,0 +1,19 @@
+# Build output
+dist/
+build/
+
+# Dependencies
+node_modules/
+
+# Cache
+.cache/
+.parcel-cache/
+
+# Development
+.env.local
+
+# Webpack
+*.hot-update.*
+
+# Coverage
+coverage/
