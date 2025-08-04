@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import Bullet from '../sprites/Bullet.js';
+import BasicZombie from '../sprites/BasicZombie.js';
 
 export default class GameScene extends Phaser.Scene {
     constructor() {
@@ -8,27 +10,68 @@ export default class GameScene extends Phaser.Scene {
         this.score = 0;
         this.gameTime = 0;
         this.hp = 100;
+        this.crosshair = null;
+        this.bullets = null;
+        this.zombies = null;
+        this.zombieSpawnTimer = null;
+        this.zombieSpawnRate = 2000; // Start spawning every 2 seconds
+        this.backgroundMusic = null;
     }
 
     preload() {
         // Load game assets
         this.load.image('banana', 'assets/banana.png');
+        this.load.image('crosshair', 'assets/crosshairs.png');
+        this.load.image('zombie1', 'assets/zombie-1.png');
+        this.load.audio('zombie-game', 'assets/zombie-game.mp3');
     }
 
     create() {
         const { width, height } = this.cameras.main;
 
-        // Dark city background
-        this.add.rectangle(width / 2, height / 2, width, height, 0x0f0f23);
+        // Create large world bounds for infinite scrolling feel
+        this.physics.world.setBounds(-10000, -10000, 20000, 20000);
 
-        // Create player (banana)
-        this.player = this.physics.add.sprite(width / 2, height / 2, 'banana');
+        // Dark city background (much larger for scrolling)
+        this.add.rectangle(0, 0, 20000, 20000, 0x0f0f23);
+
+        // Create player (banana) at world center
+        this.player = this.physics.add.sprite(0, 0, 'banana');
         this.player.setScale(0.1);
-        this.player.setCollideWorldBounds(true);
+        // Remove world bounds collision for infinite feel
+        this.player.setCollideWorldBounds(false);
+
+        // Set camera to follow player and keep them centered
+        this.cameras.main.startFollow(this.player);
+        this.cameras.main.setDeadzone(0, 0); // No deadzone = always centered
 
         // Create cursor keys
         this.cursors = this.input.keyboard.createCursorKeys();
         this.wasd = this.input.keyboard.addKeys('W,S,A,D');
+
+        // Create crosshair
+        this.crosshair = this.add.image(0, 0, 'crosshair');
+        this.crosshair.setDepth(1000); // Always on top
+
+        // Create bullets group
+        this.bullets = this.physics.add.group({
+            classType: Bullet,
+            maxSize: 50,
+            runChildUpdate: true
+        });
+
+        // Create zombies group
+        this.zombies = this.physics.add.group({
+            classType: BasicZombie,
+            maxSize: 50,
+            runChildUpdate: true
+        });
+
+        // Set up collision detection
+        this.physics.add.overlap(this.bullets, this.zombies, this.bulletHitZombie, null, this);
+
+        // Hide default cursor and use custom crosshair
+        this.input.setDefaultCursor('none');
 
         // Create UI
         this.createUI();
@@ -41,19 +84,40 @@ export default class GameScene extends Phaser.Scene {
             loop: true
         });
 
+        // Start zombie spawning
+        this.zombieSpawnTimer = this.time.addEvent({
+            delay: this.zombieSpawnRate,
+            callback: this.spawnZombie,
+            callbackScope: this,
+            loop: true
+        });
+
         // Mouse controls for aiming
         this.input.on('pointermove', (pointer) => {
+            // Convert screen coordinates to world coordinates
+            const worldX = pointer.x + this.cameras.main.scrollX;
+            const worldY = pointer.y + this.cameras.main.scrollY;
+            
+            // Update crosshair position
+            this.crosshair.setPosition(worldX, worldY);
+            
             // Player always faces mouse cursor
             const angle = Phaser.Math.Angle.Between(
                 this.player.x, this.player.y,
-                pointer.x + this.cameras.main.scrollX,
-                pointer.y + this.cameras.main.scrollY
+                worldX, worldY
             );
             this.player.setRotation(angle);
         });
 
+        // Mouse click to shoot
+        this.input.on('pointerdown', (pointer) => {
+            const worldX = pointer.x + this.cameras.main.scrollX;
+            const worldY = pointer.y + this.cameras.main.scrollY;
+            this.shoot(worldX, worldY);
+        });
+
         // Instructions
-        this.add.text(width / 2, height - 30, 'WASD to move • Mouse to aim • ESC for menu', {
+        this.add.text(width / 2, height - 30, 'WASD to move • Mouse to aim • Click to shoot • ESC for menu', {
             fontSize: '14px',
             fontFamily: 'Courier New, monospace',
             color: '#888888',
@@ -62,8 +126,15 @@ export default class GameScene extends Phaser.Scene {
 
         // ESC to return to menu
         this.input.keyboard.on('keydown-ESC', () => {
+            // Stop game music before returning to menu
+            if (this.backgroundMusic) {
+                this.backgroundMusic.stop();
+            }
             this.scene.start('MenuScene');
         });
+
+        // Start background music
+        this.startBackgroundMusic();
     }
 
     createUI() {
@@ -101,6 +172,7 @@ export default class GameScene extends Phaser.Scene {
     update() {
         this.handleMovement();
         this.updateUI();
+        this.updateCrosshair();
     }
 
     handleMovement() {
@@ -151,7 +223,131 @@ export default class GameScene extends Phaser.Scene {
         this.timerText.setText(`Time: ${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
     }
 
+    updateCrosshair() {
+        // Keep crosshair at mouse position in world coordinates
+        const pointer = this.input.activePointer;
+        if (pointer) {
+            const worldX = pointer.x + this.cameras.main.scrollX;
+            const worldY = pointer.y + this.cameras.main.scrollY;
+            this.crosshair.setPosition(worldX, worldY);
+        }
+    }
+
+    shoot(targetX, targetY) {
+        // Get bullet from pool or create new one
+        let bullet = this.bullets.getFirstDead();
+        
+        if (!bullet) {
+            bullet = new Bullet(this, 0, 0);
+            this.bullets.add(bullet);
+        }
+        
+        // Fire bullet from player position to target
+        bullet.fire(this.player.x, this.player.y, targetX, targetY);
+        
+        // Add shooting sound effect here later
+        // this.sound.play('gunshot');
+    }
+
+    spawnZombie() {
+        const { width, height } = this.cameras.main;
+        const camera = this.cameras.main;
+        
+        // Get camera bounds in world coordinates
+        const cameraLeft = camera.scrollX;
+        const cameraRight = camera.scrollX + width;
+        const cameraTop = camera.scrollY;
+        const cameraBottom = camera.scrollY + height;
+        
+        // Choose random edge to spawn from (relative to camera view)
+        const edge = Phaser.Math.Between(0, 3); // 0=top, 1=right, 2=bottom, 3=left
+        let x, y;
+        
+        switch (edge) {
+            case 0: // Top
+                x = Phaser.Math.Between(cameraLeft, cameraRight);
+                y = cameraTop - 50;
+                break;
+            case 1: // Right
+                x = cameraRight + 50;
+                y = Phaser.Math.Between(cameraTop, cameraBottom);
+                break;
+            case 2: // Bottom
+                x = Phaser.Math.Between(cameraLeft, cameraRight);
+                y = cameraBottom + 50;
+                break;
+            case 3: // Left
+                x = cameraLeft - 50;
+                y = Phaser.Math.Between(cameraTop, cameraBottom);
+                break;
+        }
+        
+        // Get zombie from pool or create new one
+        let zombie = this.zombies.getFirstDead();
+        if (!zombie) {
+            zombie = new BasicZombie(this, x, y);
+            this.zombies.add(zombie);
+        } else {
+            zombie.reset(x, y);
+        }
+    }
+
+    bulletHitZombie(bullet, zombie) {
+        if (!bullet.active || zombie.isDead) return;
+        
+        // Damage zombie
+        const zombieDied = zombie.takeDamage(bullet.damage);
+        
+        // Destroy bullet
+        bullet.destroy();
+        
+        // If zombie died, it handles its own scoring
+    }
+
+    damagePlayer(damage) {
+        this.hp -= damage;
+        
+        // Clamp HP to 0-100 range
+        this.hp = Math.max(0, this.hp);
+        
+        // Check for game over
+        if (this.hp <= 0) {
+            this.gameOver();
+        }
+        
+        // Visual feedback for player damage
+        this.cameras.main.shake(200, 0.01);
+    }
+
+    addScore(points) {
+        this.score += points;
+    }
+
+    startBackgroundMusic() {
+        // Stop any existing music
+        if (this.backgroundMusic) {
+            this.backgroundMusic.stop();
+        }
+        
+        // Start game music
+        this.backgroundMusic = this.sound.add('zombie-game', {
+            loop: true,
+            volume: 0.4 // Slightly quieter during gameplay
+        });
+        this.backgroundMusic.play();
+    }
+
     gameOver() {
+        // Stop spawning zombies
+        if (this.zombieSpawnTimer) {
+            this.zombieSpawnTimer.destroy();
+        }
+        
+        // Stop game music
+        if (this.backgroundMusic) {
+            this.backgroundMusic.stop();
+        }
+        
         this.scene.start('GameOverScene', { 
             score: this.score, 
             time: this.gameTime 

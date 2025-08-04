@@ -3,11 +3,13 @@ import Phaser from 'phaser';
 export default class MenuScene extends Phaser.Scene {
     constructor() {
         super({ key: 'MenuScene' });
+        this.backgroundMusic = null;
     }
 
     preload() {
         // Load menu assets
         this.load.image('loading_screen', 'assets/loading_screen.png');
+        this.load.audio('zombie-theme', 'assets/zombie-theme.mp3');
     }
 
     create() {
@@ -49,9 +51,30 @@ export default class MenuScene extends Phaser.Scene {
             color: '#cccccc',
             align: 'center'
         }).setOrigin(0.5);
+
+        // Start background music
+        this.startBackgroundMusic();
+    }
+
+    startBackgroundMusic() {
+        // Stop any existing music
+        if (this.backgroundMusic) {
+            this.backgroundMusic.stop();
+        }
+        
+        // Start menu theme music
+        this.backgroundMusic = this.sound.add('zombie-theme', {
+            loop: true,
+            volume: 0.5
+        });
+        this.backgroundMusic.play();
     }
 
     startGame() {
+        // Stop menu music before switching scenes
+        if (this.backgroundMusic) {
+            this.backgroundMusic.stop();
+        }
         this.scene.start('GameScene');
     }
 

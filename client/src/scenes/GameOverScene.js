@@ -5,6 +5,7 @@ export default class GameOverScene extends Phaser.Scene {
         super({ key: 'GameOverScene' });
         this.finalScore = 0;
         this.survivalTime = 0;
+        this.backgroundMusic = null;
     }
 
     init(data) {
@@ -14,6 +15,7 @@ export default class GameOverScene extends Phaser.Scene {
 
     preload() {
         // Load any game over assets if needed
+        this.load.audio('zombie-theme', 'assets/zombie-theme.mp3');
     }
 
     create() {
@@ -103,13 +105,35 @@ export default class GameOverScene extends Phaser.Scene {
             color: '#888888',
             align: 'center'
         }).setOrigin(0.5);
+
+        // Start background music (same as menu)
+        this.startBackgroundMusic();
+    }
+
+    startBackgroundMusic() {
+        // Stop any existing music
+        if (this.backgroundMusic) {
+            this.backgroundMusic.stop();
+        }
+        
+        // Start menu theme music (same as menu screen)
+        this.backgroundMusic = this.sound.add('zombie-theme', {
+            loop: true,
+            volume: 0.5
+        });
+        this.backgroundMusic.play();
     }
 
     restartGame() {
+        // Stop music before switching to game
+        if (this.backgroundMusic) {
+            this.backgroundMusic.stop();
+        }
         this.scene.start('GameScene');
     }
 
     returnToMenu() {
+        // Music continues since menu uses same theme
         this.scene.start('MenuScene');
     }
 }
