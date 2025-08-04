@@ -32,6 +32,10 @@ module.exports = {
           from: 'assets',
           to: 'assets',
         },
+        {
+          from: 'src/manifest.json',
+          to: 'manifest.json',
+        },
       ],
     }),
   ],

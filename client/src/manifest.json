@@ -1,0 +1,21 @@
+{
+  "name": "Banana Pajama Zombie Shooter",
+  "short_name": "Banana Pajama",
+  "description": "A top-down zombie survival shooter game with a banana character",
+  "start_url": "/",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "theme_color": "#1a1a2e",
+  "background_color": "#1a1a2e",
+  "icons": [
+    {
+      "src": "assets/banana.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["games", "entertainment"],
+  "lang": "en",
+  "dir": "ltr"
+}

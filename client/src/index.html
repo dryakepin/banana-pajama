@@ -2,9 +2,31 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, orientation=landscape">
+    <meta name="screen-orientation" content="landscape">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-touch-fullscreen" content="yes">
+    <meta name="format-detection" content="telephone=no">
+    <meta name="msapplication-tap-highlight" content="no">
+    <link rel="manifest" href="manifest.json">
     <title>Banana Pajama Zombie Shooter</title>
     <style>
+        /* CSS custom properties for mobile viewport handling */
+        :root {
+            --vh: 1vh;
+        }
+        
+        * {
+            box-sizing: border-box;
+        }
+        
+        html {
+            height: 100%;
+            overflow: hidden;
+        }
+        
         body {
             margin: 0;
             padding: 0;
@@ -15,13 +37,25 @@
             justify-content: center;
             align-items: center;
             min-height: 100vh;
+            min-height: calc(var(--vh, 1vh) * 100); /* Fallback for mobile browsers */
             overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            /* Prevent scrolling and bouncing on mobile */
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: none;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+            -webkit-tap-highlight-color: transparent;
         }
         
         #game-container {
-            border: 2px solid #333;
-            border-radius: 8px;
-            background-color: #000;
+            /* Default desktop styles moved to media query below */
         }
         
         canvas {
@@ -58,6 +92,68 @@
             background: linear-gradient(90deg, #ff4444, #ffff44, #44ff44);
             width: 0%;
             transition: width 0.3s ease;
+        }
+        
+        /* Force landscape orientation on mobile */
+        @media screen and (max-width: 768px) {
+            body {
+                transform-origin: center center;
+            }
+            
+            /* Hide content in portrait mode and show rotation message */
+            @media (orientation: portrait) {
+                #game-container {
+                    display: none;
+                }
+                
+                body::before {
+                    content: "📱 Please rotate your device to landscape mode to play";
+                    position: fixed;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    background: rgba(0, 0, 0, 0.9);
+                    color: white;
+                    padding: 20px;
+                    border-radius: 10px;
+                    text-align: center;
+                    font-size: 18px;
+                    z-index: 10000;
+                    width: 80%;
+                    box-sizing: border-box;
+                }
+            }
+            
+            @media (orientation: landscape) {
+                #game-container {
+                    display: block;
+                    width: 100vw;
+                    height: 100vh;
+                    height: calc(var(--vh, 1vh) * 100); /* Mobile viewport fix */
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    z-index: 1000;
+                }
+                
+                canvas {
+                    width: 100vw !important;
+                    height: 100vh !important;
+                    height: calc(var(--vh, 1vh) * 100) !important; /* Mobile viewport fix */
+                    position: fixed !important;
+                    top: 0 !important;
+                    left: 0 !important;
+                }
+            }
+        }
+        
+        /* Desktop styles remain unchanged */
+        @media screen and (min-width: 769px) {
+            #game-container {
+                border: 2px solid #333;
+                border-radius: 8px;
+                background-color: #000;
+            }
         }
     </style>
 </head>
