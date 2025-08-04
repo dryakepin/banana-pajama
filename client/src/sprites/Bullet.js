@@ -27,7 +27,7 @@ export default class Bullet extends Phaser.Physics.Arcade.Sprite {
         
         // Bullet properties
         this.speed = 600;
-        this.damage = 10;
+        this.damage = 1; // 1 damage per shot
         this.active = false;
         this.targetX = 0;
         this.targetY = 0;

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import Bullet from '../sprites/Bullet.js';
 import BasicZombie from '../sprites/BasicZombie.js';
+import TankZombie from '../sprites/TankZombie.js';
 import TileMap from '../world/TileMap.js';
 import VirtualJoystick from '../ui/VirtualJoystick.js';
 
@@ -15,8 +16,11 @@ export default class GameScene extends Phaser.Scene {
         this.crosshair = null;
         this.bullets = null;
         this.zombies = null;
+        this.tankZombies = null;
         this.zombieSpawnTimer = null;
+        this.tankZombieSpawnTimer = null;
         this.zombieSpawnRate = 2000; // Start spawning every 2 seconds
+        this.tankZombieSpawnRate = 8000; // Tank zombies spawn every 8 seconds
         this.backgroundMusic = null;
         this.tileMap = null;
         this.virtualJoystick = null;
@@ -30,6 +34,7 @@ export default class GameScene extends Phaser.Scene {
         this.load.image('banana', 'assets/banana.png');
         this.load.image('crosshair', 'assets/crosshairs.png');
         this.load.image('zombie1', 'assets/zombie-1.png');
+        this.load.image('zombie2', 'assets/zombie-2.png');
         this.load.audio('zombie-game', 'assets/zombie-game.mp3');
         
         // Load tile PNG assets
@@ -129,8 +134,16 @@ export default class GameScene extends Phaser.Scene {
             runChildUpdate: true
         });
 
+        // Create tank zombies group
+        this.tankZombies = this.physics.add.group({
+            classType: TankZombie,
+            maxSize: 10, // Fewer tank zombies
+            runChildUpdate: true
+        });
+
         // Set up collision detection
         this.physics.add.overlap(this.bullets, this.zombies, this.bulletHitZombie, null, this);
+        this.physics.add.overlap(this.bullets, this.tankZombies, this.bulletHitTankZombie, null, this);
 
         // Hide default cursor and use custom crosshair
         this.input.setDefaultCursor('none');
@@ -156,6 +169,14 @@ export default class GameScene extends Phaser.Scene {
         this.zombieSpawnTimer = this.time.addEvent({
             delay: this.zombieSpawnRate,
             callback: this.spawnZombie,
+            callbackScope: this,
+            loop: true
+        });
+
+        // Start tank zombie spawning
+        this.tankZombieSpawnTimer = this.time.addEvent({
+            delay: this.tankZombieSpawnRate,
+            callback: this.spawnTankZombie,
             callbackScope: this,
             loop: true
         });
@@ -609,6 +630,56 @@ export default class GameScene extends Phaser.Scene {
         }
     }
 
+    spawnTankZombie() {
+        const { width, height } = this.cameras.main;
+        const camera = this.cameras.main;
+        
+        // Get camera bounds in world coordinates
+        const cameraLeft = camera.scrollX;
+        const cameraRight = camera.scrollX + width;
+        const cameraTop = camera.scrollY;
+        const cameraBottom = camera.scrollY + height;
+        
+        // Choose random edge to spawn from (relative to camera view)
+        const edge = Phaser.Math.Between(0, 3); // 0=top, 1=right, 2=bottom, 3=left
+        let x, y;
+        
+        switch (edge) {
+            case 0: // Top
+                x = Phaser.Math.Between(cameraLeft, cameraRight);
+                y = cameraTop - 80; // Spawn further away for tank zombies
+                break;
+            case 1: // Right
+                x = cameraRight + 80;
+                y = Phaser.Math.Between(cameraTop, cameraBottom);
+                break;
+            case 2: // Bottom
+                x = Phaser.Math.Between(cameraLeft, cameraRight);
+                y = cameraBottom + 80;
+                break;
+            case 3: // Left
+                x = cameraLeft - 80;
+                y = Phaser.Math.Between(cameraTop, cameraBottom);
+                break;
+        }
+        
+        // Find walkable spawn position
+        if (this.tileMap && !this.tileMap.isWalkable(x, y)) {
+            const walkablePos = this.tileMap.getNearestWalkablePosition(x, y);
+            x = walkablePos.x;
+            y = walkablePos.y;
+        }
+        
+        // Get tank zombie from pool or create new one
+        let tankZombie = this.tankZombies.getFirstDead();
+        if (!tankZombie) {
+            tankZombie = new TankZombie(this, x, y);
+            this.tankZombies.add(tankZombie);
+        } else {
+            tankZombie.reset(x, y);
+        }
+    }
+
     bulletHitZombie(bullet, zombie) {
         if (!bullet.active || zombie.isDead) return;
         
@@ -619,6 +690,18 @@ export default class GameScene extends Phaser.Scene {
         bullet.destroy();
         
         // If zombie died, it handles its own scoring
+    }
+
+    bulletHitTankZombie(bullet, tankZombie) {
+        if (!bullet.active || tankZombie.isDead) return;
+        
+        // Damage tank zombie
+        const tankZombieDied = tankZombie.takeDamage(bullet.damage);
+        
+        // Destroy bullet
+        bullet.destroy();
+        
+        // If tank zombie died, it handles its own scoring
     }
 
     damagePlayer(damage) {
@@ -658,6 +741,11 @@ export default class GameScene extends Phaser.Scene {
         // Stop spawning zombies
         if (this.zombieSpawnTimer) {
             this.zombieSpawnTimer.destroy();
+        }
+        
+        // Stop spawning tank zombies
+        if (this.tankZombieSpawnTimer) {
+            this.tankZombieSpawnTimer.destroy();
         }
         
         // Stop game music
