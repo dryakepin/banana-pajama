@@ -29,6 +29,11 @@ export default class GameScene extends Phaser.Scene {
     create() {
         const { width, height } = this.cameras.main;
 
+        // Reset game state when starting new game
+        this.score = 0;
+        this.gameTime = 0;
+        this.hp = 100;
+
         // Create large world bounds for infinite scrolling feel
         this.physics.world.setBounds(-10000, -10000, 20000, 20000);
 

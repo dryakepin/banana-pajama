@@ -45,7 +45,7 @@ export default class GameOverScene extends Phaser.Scene {
         const seconds = this.survivalTime % 60;
         const timeString = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 
-        this.add.text(width / 2, height / 2, `Final Score: ${this.finalScore}\\nSurvival Time: ${timeString}`, {
+        this.add.text(width / 2, height / 2, `Final Score: ${this.finalScore}\nSurvival Time: ${timeString}`, {
             fontSize: '24px',
             fontFamily: 'Courier New, monospace',
             color: '#ffffff',
