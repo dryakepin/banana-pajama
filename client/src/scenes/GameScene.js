@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import Bullet from '../sprites/Bullet.js';
 import BasicZombie from '../sprites/BasicZombie.js';
 import TileMap from '../world/TileMap.js';
+import VirtualJoystick from '../ui/VirtualJoystick.js';
 
 export default class GameScene extends Phaser.Scene {
     constructor() {
@@ -18,6 +19,10 @@ export default class GameScene extends Phaser.Scene {
         this.zombieSpawnRate = 2000; // Start spawning every 2 seconds
         this.backgroundMusic = null;
         this.tileMap = null;
+        this.virtualJoystick = null;
+        this.isMobile = false;
+        this.joystickPointerId = null; // Track which pointer is controlling joystick
+        this.aimingPointerId = null;   // Track which pointer is aiming
     }
 
     preload() {
@@ -52,6 +57,31 @@ export default class GameScene extends Phaser.Scene {
     create() {
         const { width, height } = this.cameras.main;
 
+        // Detect mobile device - more accurate detection
+        // Don't use touch support alone as laptops can have touchscreens
+        this.isMobile = this.sys.game.device.os.android || 
+                       this.sys.game.device.os.iOS || 
+                       this.sys.game.device.os.windowsPhone ||
+                       /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+                       // Only consider it mobile if it's a small screen AND has touch
+                       (('ontouchstart' in window) && (window.innerWidth <= 768 || window.innerHeight <= 768));
+                       
+        // TEMPORARY: Uncomment the line below to force mobile mode for desktop testing  
+        // this.isMobile = true;
+        
+        console.log('Mobile detection:', {
+            android: this.sys.game.device.os.android,
+            iOS: this.sys.game.device.os.iOS,
+            userAgent: navigator.userAgent,
+            ontouchstart: 'ontouchstart' in window,
+            maxTouchPoints: navigator.maxTouchPoints,
+            screenWidth: window.innerWidth,
+            screenHeight: window.innerHeight,
+            isSmallScreen: (window.innerWidth <= 768 || window.innerHeight <= 768),
+            isMobile: this.isMobile,
+            detectionMethod: 'improved'
+        });
+
         // Reset game state when starting new game
         this.score = 0;
         this.gameTime = 0;
@@ -77,9 +107,13 @@ export default class GameScene extends Phaser.Scene {
         this.cursors = this.input.keyboard.createCursorKeys();
         this.wasd = this.input.keyboard.addKeys('W,S,A,D');
 
-        // Create crosshair
+        // Create crosshair (larger for mobile)
         this.crosshair = this.add.image(0, 0, 'crosshair');
         this.crosshair.setDepth(1000); // Always on top
+        if (this.isMobile) {
+            this.crosshair.setScale(1.5); // Make crosshair larger on mobile
+            this.crosshair.setVisible(false); // Hide crosshair initially on mobile
+        }
 
         // Create bullets group
         this.bullets = this.physics.add.group({
@@ -104,6 +138,12 @@ export default class GameScene extends Phaser.Scene {
         // Create UI
         this.createUI();
 
+        // Virtual joystick will be created dynamically on mobile when user first touches
+        if (this.isMobile) {
+            console.log(`Mobile device detected - dynamic joystick will be created on first touch`);
+            console.log(`Screen dimensions: ${width}x${height}`);
+        }
+
         // Start game timer
         this.gameTimer = this.time.addEvent({
             delay: 1000,
@@ -120,40 +160,23 @@ export default class GameScene extends Phaser.Scene {
             loop: true
         });
 
-        // Mouse controls for aiming
-        this.input.on('pointermove', (pointer) => {
-            // Convert screen coordinates to world coordinates
-            const worldX = pointer.x + this.cameras.main.scrollX;
-            const worldY = pointer.y + this.cameras.main.scrollY;
-            
-            // Update crosshair position
-            this.crosshair.setPosition(worldX, worldY);
-            
-            // Update crosshair color based on line of sight
-            if (this.tileMap && this.hasLineOfSight(this.player.x, this.player.y, worldX, worldY)) {
-                this.crosshair.setTint(0xffffff); // White - clear shot
-            } else {
-                this.crosshair.setTint(0xff4444); // Red - blocked shot
-            }
-            
-            // Player always faces mouse cursor
-            const angle = Phaser.Math.Angle.Between(
-                this.player.x, this.player.y,
-                worldX, worldY
-            );
-            this.player.setRotation(angle);
-        });
+        if (this.isMobile) {
+            // Multi-touch handling for mobile
+            this.setupMobileControls();
+        } else {
+            // Desktop mouse controls
+            this.setupDesktopControls();
+        }
 
-        // Mouse click to shoot
-        this.input.on('pointerdown', (pointer) => {
-            const worldX = pointer.x + this.cameras.main.scrollX;
-            const worldY = pointer.y + this.cameras.main.scrollY;
-            this.shoot(worldX, worldY);
-        });
-
-        // Instructions
-        this.add.text(width / 2, height - 30, 'WASD to move • Mouse to aim • Click to shoot • ESC for menu', {
-            fontSize: '14px',
+        // Instructions (different for mobile vs desktop)
+        const instructionText = this.isMobile ? 
+            'Touch & hold to create joystick • Second finger to aim & shoot' :
+            'WASD to move • Mouse to aim • Click to shoot • ESC for menu';
+            
+        const fontSize = this.isMobile ? '16px' : '14px'; // Larger text on mobile
+        
+        this.add.text(width / 2, height - 30, instructionText, {
+            fontSize: fontSize,
             fontFamily: 'Courier New, monospace',
             color: '#888888',
             align: 'center'
@@ -207,7 +230,11 @@ export default class GameScene extends Phaser.Scene {
     update() {
         this.handleMovement();
         this.updateUI();
-        this.updateCrosshair();
+        
+        // Only update crosshair automatically on desktop
+        if (!this.isMobile) {
+            this.updateCrosshair();
+        }
         
         // Update tile map based on player position
         if (this.tileMap && this.player) {
@@ -220,17 +247,24 @@ export default class GameScene extends Phaser.Scene {
         let velocityX = 0;
         let velocityY = 0;
 
-        // WASD movement
-        if (this.wasd.A.isDown || this.cursors.left.isDown) {
-            velocityX = -speed;
-        } else if (this.wasd.D.isDown || this.cursors.right.isDown) {
-            velocityX = speed;
-        }
+        if (this.isMobile && this.virtualJoystick) {
+            // Use virtual joystick for mobile
+            const input = this.virtualJoystick.getInputVector();
+            velocityX = input.x * speed;
+            velocityY = input.y * speed;
+        } else {
+            // WASD/Arrow key movement for desktop
+            if (this.wasd.A.isDown || this.cursors.left.isDown) {
+                velocityX = -speed;
+            } else if (this.wasd.D.isDown || this.cursors.right.isDown) {
+                velocityX = speed;
+            }
 
-        if (this.wasd.W.isDown || this.cursors.up.isDown) {
-            velocityY = -speed;
-        } else if (this.wasd.S.isDown || this.cursors.down.isDown) {
-            velocityY = speed;
+            if (this.wasd.W.isDown || this.cursors.up.isDown) {
+                velocityY = -speed;
+            } else if (this.wasd.S.isDown || this.cursors.down.isDown) {
+                velocityY = speed;
+            }
         }
 
         // Check collision with buildings before moving
@@ -348,6 +382,162 @@ export default class GameScene extends Phaser.Scene {
         
         return true; // Clear line of sight
     }
+    
+    // Helper method to check if pointer is over virtual joystick
+    isPointerOverJoystick(pointer) {
+        if (!this.virtualJoystick) return false;
+        
+        const distance = Phaser.Math.Distance.Between(
+            pointer.x, pointer.y, 
+            this.virtualJoystick.x, this.virtualJoystick.y
+        );
+        
+        return distance <= this.virtualJoystick.radius;
+    }
+    
+    setupMobileControls() {
+        // Enable multi-touch
+        this.input.addPointer(2); // Allow up to 3 total pointers (default 1 + 2 more)
+        
+        this.input.on('pointerdown', (pointer) => {
+            if (!this.virtualJoystick && this.joystickPointerId === null) {
+                // First touch - create joystick at touch location
+                console.log(`Creating dynamic joystick at (${pointer.x}, ${pointer.y})`);
+                this.virtualJoystick = new VirtualJoystick(this, pointer.x, pointer.y);
+                this.joystickPointerId = pointer.id;
+                this.virtualJoystick.handlePointerDown(pointer);
+            } else if (this.isPointerOverJoystick(pointer) && this.joystickPointerId === null) {
+                // Touch is on existing joystick - show it and activate
+                this.joystickPointerId = pointer.id;
+                if (this.virtualJoystick) {
+                    this.virtualJoystick.setVisible(true);
+                    this.virtualJoystick.handlePointerDown(pointer);
+                }
+            } else if (this.aimingPointerId === null) {
+                // This touch is for aiming/shooting (second touch or touch away from joystick)
+                this.aimingPointerId = pointer.id;
+                this.handleAimingTouch(pointer);
+            }
+        });
+        
+        this.input.on('pointermove', (pointer) => {
+            if (pointer.id === this.joystickPointerId && this.virtualJoystick) {
+                // Update joystick
+                this.virtualJoystick.handlePointerMove(pointer);
+            } else if (pointer.id === this.aimingPointerId) {
+                // Update aiming
+                this.handleAimingTouch(pointer);
+            }
+        });
+        
+        this.input.on('pointerup', (pointer) => {
+            if (pointer.id === this.joystickPointerId) {
+                // Release joystick - hide it when not in use
+                this.joystickPointerId = null;
+                if (this.virtualJoystick) {
+                    this.virtualJoystick.handlePointerUp(pointer);
+                    // Hide joystick after a short delay if no other touches
+                    this.time.delayedCall(1000, () => {
+                        if (this.joystickPointerId === null && this.virtualJoystick) {
+                            this.virtualJoystick.setVisible(false);
+                        }
+                    });
+                }
+            } else if (pointer.id === this.aimingPointerId) {
+                // Release aiming and shoot
+                const worldX = pointer.x + this.cameras.main.scrollX;
+                const worldY = pointer.y + this.cameras.main.scrollY;
+                this.shoot(worldX, worldY);
+                this.aimingPointerId = null;
+                
+                // Hide crosshair when aiming ends on mobile
+                if (this.isMobile) {
+                    this.crosshair.setVisible(false);
+                }
+            }
+        });
+        
+        // Handle when pointers leave the screen
+        this.input.on('pointerupoutside', (pointer) => {
+            if (pointer.id === this.joystickPointerId) {
+                this.joystickPointerId = null;
+                if (this.virtualJoystick) {
+                    this.virtualJoystick.handlePointerUp(pointer);
+                    // Hide joystick when finger leaves screen
+                    this.time.delayedCall(500, () => {
+                        if (this.joystickPointerId === null && this.virtualJoystick) {
+                            this.virtualJoystick.setVisible(false);
+                        }
+                    });
+                }
+            } else if (pointer.id === this.aimingPointerId) {
+                this.aimingPointerId = null;
+                
+                // Hide crosshair when aiming finger leaves screen on mobile
+                if (this.isMobile) {
+                    this.crosshair.setVisible(false);
+                }
+            }
+        });
+    }
+    
+    setupDesktopControls() {
+        // Standard mouse controls for desktop
+        this.input.on('pointermove', (pointer) => {
+            const worldX = pointer.x + this.cameras.main.scrollX;
+            const worldY = pointer.y + this.cameras.main.scrollY;
+            
+            // Update crosshair position
+            this.crosshair.setPosition(worldX, worldY);
+            
+            // Update crosshair color based on line of sight
+            if (this.tileMap && this.hasLineOfSight(this.player.x, this.player.y, worldX, worldY)) {
+                this.crosshair.setTint(0xffffff); // White - clear shot
+            } else {
+                this.crosshair.setTint(0xff4444); // Red - blocked shot
+            }
+            
+            // Player always faces mouse cursor
+            const angle = Phaser.Math.Angle.Between(
+                this.player.x, this.player.y,
+                worldX, worldY
+            );
+            this.player.setRotation(angle);
+        });
+
+        this.input.on('pointerdown', (pointer) => {
+            const worldX = pointer.x + this.cameras.main.scrollX;
+            const worldY = pointer.y + this.cameras.main.scrollY;
+            this.shoot(worldX, worldY);
+        });
+    }
+    
+    handleAimingTouch(pointer) {
+        const worldX = pointer.x + this.cameras.main.scrollX;
+        const worldY = pointer.y + this.cameras.main.scrollY;
+        
+        // Show crosshair when aiming starts
+        if (!this.crosshair.visible) {
+            this.crosshair.setVisible(true);
+        }
+        
+        // Update crosshair position
+        this.crosshair.setPosition(worldX, worldY);
+        
+        // Update crosshair color based on line of sight
+        if (this.tileMap && this.hasLineOfSight(this.player.x, this.player.y, worldX, worldY)) {
+            this.crosshair.setTint(0xffffff); // White - clear shot
+        } else {
+            this.crosshair.setTint(0xff4444); // Red - blocked shot
+        }
+        
+        // Player always faces the aiming touch
+        const angle = Phaser.Math.Angle.Between(
+            this.player.x, this.player.y,
+            worldX, worldY
+        );
+        this.player.setRotation(angle);
+    }
 
     spawnZombie() {
         const { width, height } = this.cameras.main;
@@ -458,6 +648,11 @@ export default class GameScene extends Phaser.Scene {
         // Clean up tile map
         if (this.tileMap) {
             this.tileMap.destroy();
+        }
+        
+        // Clean up virtual joystick
+        if (this.virtualJoystick) {
+            this.virtualJoystick.destroy();
         }
         
         this.scene.start('GameOverScene', { 
