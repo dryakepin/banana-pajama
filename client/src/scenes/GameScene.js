@@ -27,6 +27,8 @@ export default class GameScene extends Phaser.Scene {
         this.isMobile = false;
         this.joystickPointerId = null; // Track which pointer is controlling joystick
         this.aimingPointerId = null;   // Track which pointer is aiming
+        this.lastShotTime = 0; // Track when last shot was fired
+        this.shotCooldown = 400; // 400ms between shots
     }
 
     preload() {
@@ -365,6 +367,12 @@ export default class GameScene extends Phaser.Scene {
     }
 
     shoot(targetX, targetY) {
+        // Check shot cooldown
+        const currentTime = this.time.now;
+        if (currentTime - this.lastShotTime < this.shotCooldown) {
+            return; // Still in cooldown, don't fire
+        }
+        
         // Check line of sight before firing
         if (this.tileMap && !this.hasLineOfSight(this.player.x, this.player.y, targetX, targetY)) {
             // Don't fire if there's a building in the way
@@ -381,6 +389,9 @@ export default class GameScene extends Phaser.Scene {
         
         // Fire bullet from player position to target
         bullet.fire(this.player.x, this.player.y, targetX, targetY);
+        
+        // Update last shot time
+        this.lastShotTime = currentTime;
         
         // Add shooting sound effect here later
         // this.sound.play('gunshot');
