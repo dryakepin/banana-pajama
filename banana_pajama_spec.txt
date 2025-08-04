@@ -10,15 +10,20 @@ Et top-down zombie survival spil hvor spilleren kontrollerer en banan i pyjamas 
 - **Størrelse**: Ca. 32x48 pixels for optimal visning på begge platforme
 
 ## Spilleverdenen
-- **Setting**: Moderne storby med skyskrabere
+- **Setting**: Stor moderne storby med skyskrabere - stort åbent verden
+- **Verdensstørrelse**: Stor spilleverden der strækker sig langt ud over skærmens grænser
+- **Kamera System**: 
+  - Spillerkarakteren er altid centreret på skærmen
+  - Verdenen bevæger sig omkring spilleren (scrolling baggrund)
+  - Top-down/isometrisk view som Vampire Survivors
 - **Stemning**: Dyster og mørk atmosfære
-- **Kameravinkel**: Top-down/isometrisk view som Vampire Survivors
 - **Miljø**: 
   - Gader med fortove i mørke/dæmpede farver
   - Bygninger man kan gå omkring (ikke ind i) - mørke silhuetter
-  - Måske parkområder eller åbne pladser med dystert lys
+  - Parkområder, åbne pladser, industriområder med dystert lys
+  - Varierede kvarterer og områder for at skabe afveksling
   - Tekstur-baseret baggrund for at spare performance
-- **Belysning**: Dæmpet/skummel belysning, måske gadelygter der kaster skygger
+- **Belysning**: Dæmpet/skummel belysning, gadelygter der kaster skygger
 - **Farvepalet**: Mørke grå-, blå- og grønnetoner med kontraster
 
 ## Zombier (Fjender)
@@ -44,22 +49,25 @@ Et top-down zombie survival spil hvor spilleren kontrollerer en banan i pyjamas 
 
 ### Zombie Adfærd:
 - Følger altid efter spilleren (pathfinding)
-- Spawner fra skærmens kanter
+- Spawner uden for skærmens synsfelt i alle retninger
+- Bevæger sig mod spillerens centrerede position
 - Øget spawn rate over tid
-- Zombier skal navigere omkring bygninger
+- Zombier navigerer omkring bygninger og forhindringer i den store verden
+- Despawner automatisk når de kommer for langt væk fra spilleren
 
 ## Spillemekanik
 
 ### Kontroller:
 **Laptop/Desktop:**
-- WASD eller piletaster: Bevægelse
+- WASD eller piletaster: Bevægelse (verden bevæger sig omkring den centrerede spiller)
 - Mus: Sigte og skyde (automatisk skydning mod muspil)
 - Eller: Automatisk skydning mod nærmeste zombie
 
 **Mobil:**
-- Virtual joystick til bevægelse (venstre side)
+- Virtual joystick til bevægelse (venstre side) - verden scroller
 - Automatisk skydning mod nærmeste zombie
 - Alternativt: Tap for at sigte og skyde
+- Spilleren forbliver altid i skærmens center
 
 ### Spillerens Sundhed:
 - Starter med 100 HP
@@ -241,12 +249,15 @@ CREATE TABLE game_sessions (
 
 ## Performance Overvejelser
 - **Sprite pooling** for zombier (genbruge objekter i Phaser)
-- **Culling**: Kun render zombier på skærmen (Phaser Camera bounds)
-- **Begræns zombie antal** (f.eks. max 50 samtidigt)
+- **Culling**: Kun render objekter inden for kameraets synsfelt
+- **Chunked world loading**: Indlæs og aflæs verdensområder baseret på spillerens position
+- **Begræns zombie antal** (f.eks. max 50 aktive samtidigt)
+- **Level-of-detail**: Fjernere objekter bruger mindre detaljerade sprites
 - **Asset optimization**: Komprimerede billeder og lyde via CloudFront CDN
 - **Progressive loading**: Critical assets først, resten bagefter
 - **Memory management**: Phaser's indbyggede garbage collection optimering
 - **Database queries**: Indexerede high score queries for hurtig respons
+- **Viewport optimization**: Kun beregn physics for objekter nær spilleren
 
 ## Udvidelses Muligheder
 - **Power-ups** (hurtigere skydning, stærkere våben)

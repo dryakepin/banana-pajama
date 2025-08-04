@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import Bullet from '../sprites/Bullet.js';
 import BasicZombie from '../sprites/BasicZombie.js';
+import TileMap from '../world/TileMap.js';
 
 export default class GameScene extends Phaser.Scene {
     constructor() {
@@ -16,6 +17,7 @@ export default class GameScene extends Phaser.Scene {
         this.zombieSpawnTimer = null;
         this.zombieSpawnRate = 2000; // Start spawning every 2 seconds
         this.backgroundMusic = null;
+        this.tileMap = null;
     }
 
     preload() {
@@ -37,8 +39,8 @@ export default class GameScene extends Phaser.Scene {
         // Create large world bounds for infinite scrolling feel
         this.physics.world.setBounds(-10000, -10000, 20000, 20000);
 
-        // Dark city background (much larger for scrolling)
-        this.add.rectangle(0, 0, 20000, 20000, 0x0f0f23);
+        // Initialize tile-based world
+        this.tileMap = new TileMap(this);
 
         // Create player (banana) at world center
         this.player = this.physics.add.sprite(0, 0, 'banana');
@@ -178,6 +180,11 @@ export default class GameScene extends Phaser.Scene {
         this.handleMovement();
         this.updateUI();
         this.updateCrosshair();
+        
+        // Update tile map based on player position
+        if (this.tileMap && this.player) {
+            this.tileMap.update(this.player.x, this.player.y);
+        }
     }
 
     handleMovement() {
@@ -351,6 +358,11 @@ export default class GameScene extends Phaser.Scene {
         // Stop game music
         if (this.backgroundMusic) {
             this.backgroundMusic.stop();
+        }
+        
+        // Clean up tile map
+        if (this.tileMap) {
+            this.tileMap.destroy();
         }
         
         this.scene.start('GameOverScene', { 

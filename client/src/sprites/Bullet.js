@@ -9,14 +9,14 @@ export default class Bullet extends Phaser.Physics.Arcade.Sprite {
         scene.add.existing(this);
         scene.physics.add.existing(this);
         
-        // Create red dot graphics
-        this.graphics = scene.add.graphics();
-        this.graphics.fillStyle(0xff0000); // Red color
-        this.graphics.fillCircle(0, 0, 3); // 3 pixel radius
-        
-        // Convert graphics to texture
-        this.graphics.generateTexture('bullet', 6, 6);
-        this.graphics.destroy();
+        // Create bullet texture if it doesn't exist
+        if (!scene.textures.exists('bullet')) {
+            const graphics = scene.add.graphics();
+            graphics.fillStyle(0xff0000); // Red color
+            graphics.fillCircle(3, 3, 3); // 3 pixel radius, centered
+            graphics.generateTexture('bullet', 6, 6);
+            graphics.destroy();
+        }
         
         // Set the texture
         this.setTexture('bullet');
@@ -64,10 +64,15 @@ export default class Bullet extends Phaser.Physics.Arcade.Sprite {
     update() {
         if (!this.active) return;
         
-        // Check if bullet is out of bounds
+        // Check if bullet is far from camera view (world coordinates)
         const camera = this.scene.cameras.main;
-        if (this.x < -50 || this.x > camera.width + 50 || 
-            this.y < -50 || this.y > camera.height + 50) {
+        const cameraLeft = camera.scrollX - 100;
+        const cameraRight = camera.scrollX + camera.width + 100;
+        const cameraTop = camera.scrollY - 100;
+        const cameraBottom = camera.scrollY + camera.height + 100;
+        
+        if (this.x < cameraLeft || this.x > cameraRight || 
+            this.y < cameraTop || this.y > cameraBottom) {
             this.destroy();
         }
     }
