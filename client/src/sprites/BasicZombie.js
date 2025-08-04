@@ -83,10 +83,20 @@ export default class BasicZombie extends Phaser.Physics.Arcade.Sprite {
             
             this.setVelocity(velocityX, velocityY);
             
-            // Face movement direction
+            // Handle sprite rotation and flipping based on movement direction
             if (velocityX !== 0 || velocityY !== 0) {
                 const angle = Math.atan2(velocityY, velocityX);
-                this.setRotation(angle);
+                
+                // Flip sprite vertically when moving left and adjust rotation
+                if (velocityX < 0) {
+                    // Moving left - flip vertically and mirror the angle
+                    this.setFlipY(true);
+                    this.setRotation(-angle);
+                } else {
+                    // Moving right - normal orientation
+                    this.setFlipY(false);
+                    this.setRotation(angle);
+                }
             }
         } else {
             // Stop moving when in attack range

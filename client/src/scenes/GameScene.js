@@ -497,12 +497,22 @@ export default class GameScene extends Phaser.Scene {
                 this.crosshair.setTint(0xff4444); // Red - blocked shot
             }
             
-            // Player always faces mouse cursor
+            // Calculate angle and handle sprite flipping
             const angle = Phaser.Math.Angle.Between(
                 this.player.x, this.player.y,
                 worldX, worldY
             );
-            this.player.setRotation(angle);
+            
+            // Flip sprite based on crosshair position and adjust rotation
+            if (worldX < this.player.x) {
+                // Crosshair is to the left - flip sprite vertically and mirror the angle
+                this.player.setFlipY(true);
+                this.player.setRotation(-angle);
+            } else {
+                // Crosshair is to the right - normal orientation
+                this.player.setFlipY(false);
+                this.player.setRotation(angle);
+            }
         });
 
         this.input.on('pointerdown', (pointer) => {
@@ -531,12 +541,22 @@ export default class GameScene extends Phaser.Scene {
             this.crosshair.setTint(0xff4444); // Red - blocked shot
         }
         
-        // Player always faces the aiming touch
+        // Calculate angle and handle sprite flipping
         const angle = Phaser.Math.Angle.Between(
             this.player.x, this.player.y,
             worldX, worldY
         );
-        this.player.setRotation(angle);
+        
+        // Flip sprite based on crosshair position and adjust rotation
+        if (worldX < this.player.x) {
+            // Crosshair is to the left - flip sprite vertically and mirror the angle
+            this.player.setFlipY(true);
+            this.player.setRotation(-angle);
+        } else {
+            // Crosshair is to the right - normal orientation
+            this.player.setFlipY(false);
+            this.player.setRotation(angle);
+        }
     }
 
     spawnZombie() {
