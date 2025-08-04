@@ -31,6 +31,8 @@ export default class BasicZombie extends Phaser.Physics.Arcade.Sprite {
         this.target = null;
         this.isActive = true;
         this.isDead = false;
+        this.lastPathfindTime = 0;
+        this.pathfindCooldown = 200; // Recalculate movement every 200ms
     }
     
     preUpdate(time, delta) {
@@ -45,26 +47,119 @@ export default class BasicZombie extends Phaser.Physics.Arcade.Sprite {
     moveTowardsPlayer() {
         if (!this.scene.player || this.isDead) return;
         
-        // Calculate direction to player
         const player = this.scene.player;
         const distance = Phaser.Math.Distance.Between(this.x, this.y, player.x, player.y);
         
         // Only move if not too close (to prevent jittering)
         if (distance > this.attackRange) {
-            // Calculate velocity towards player
-            const angle = Phaser.Math.Angle.Between(this.x, this.y, player.x, player.y);
+            let velocityX = 0;
+            let velocityY = 0;
             
-            this.setVelocity(
-                Math.cos(angle) * this.speed,
-                Math.sin(angle) * this.speed
-            );
+            // Try smart pathfinding first
+            if (this.scene.tileMap) {
+                const currentTime = this.scene.time.now;
+                
+                // Only recalculate path periodically for performance
+                if (currentTime - this.lastPathfindTime > this.pathfindCooldown) {
+                    const moveResult = this.getSmartMove(player.x, player.y);
+                    if (moveResult) {
+                        velocityX = moveResult.x;
+                        velocityY = moveResult.y;
+                    }
+                    this.lastPathfindTime = currentTime;
+                } else {
+                    // Use last calculated velocity
+                    velocityX = this.body.velocity.x;
+                    velocityY = this.body.velocity.y;
+                }
+            }
             
-            // Face the player
-            this.setRotation(angle);
+            // Fallback to direct movement if no smart move found
+            if (velocityX === 0 && velocityY === 0) {
+                const angle = Phaser.Math.Angle.Between(this.x, this.y, player.x, player.y);
+                velocityX = Math.cos(angle) * this.speed;
+                velocityY = Math.sin(angle) * this.speed;
+            }
+            
+            this.setVelocity(velocityX, velocityY);
+            
+            // Face movement direction
+            if (velocityX !== 0 || velocityY !== 0) {
+                const angle = Math.atan2(velocityY, velocityX);
+                this.setRotation(angle);
+            }
         } else {
             // Stop moving when in attack range
             this.setVelocity(0, 0);
         }
+    }
+    
+    // Simplified smart movement - try direct path, then alternatives
+    getSmartMove(targetX, targetY) {
+        const angle = Math.atan2(targetY - this.y, targetX - this.x);
+        const moveDistance = 32; // Move in 32 pixel steps
+        
+        // Try direct movement first
+        let nextX = this.x + Math.cos(angle) * moveDistance;
+        let nextY = this.y + Math.sin(angle) * moveDistance;
+        
+        if (this.scene.tileMap.isWalkable(nextX, nextY)) {
+            return {
+                x: Math.cos(angle) * this.speed,
+                y: Math.sin(angle) * this.speed
+            };
+        }
+        
+        // Try alternative angles if direct path is blocked
+        const alternatives = [
+            angle + Math.PI / 4,   // 45 degrees right
+            angle - Math.PI / 4,   // 45 degrees left
+            angle + Math.PI / 2,   // 90 degrees right
+            angle - Math.PI / 2,   // 90 degrees left
+            angle + Math.PI * 3/4, // 135 degrees right
+            angle - Math.PI * 3/4  // 135 degrees left
+        ];
+        
+        for (const altAngle of alternatives) {
+            nextX = this.x + Math.cos(altAngle) * moveDistance;
+            nextY = this.y + Math.sin(altAngle) * moveDistance;
+            
+            if (this.scene.tileMap.isWalkable(nextX, nextY)) {
+                return {
+                    x: Math.cos(altAngle) * this.speed,
+                    y: Math.sin(altAngle) * this.speed
+                };
+            }
+        }
+        
+        // If all else fails, try to move away from walls
+        return this.getWallAvoidanceMove();
+    }
+    
+    // Simple wall avoidance - move away from nearest wall
+    getWallAvoidanceMove() {
+        const checkDistance = 64;
+        const directions = [
+            { x: 1, y: 0 },   // Right
+            { x: -1, y: 0 },  // Left
+            { x: 0, y: 1 },   // Down
+            { x: 0, y: -1 },  // Up
+        ];
+        
+        for (const dir of directions) {
+            const testX = this.x + dir.x * checkDistance;
+            const testY = this.y + dir.y * checkDistance;
+            
+            if (this.scene.tileMap.isWalkable(testX, testY)) {
+                return {
+                    x: dir.x * this.speed * 0.5, // Move slower when avoiding walls
+                    y: dir.y * this.speed * 0.5
+                };
+            }
+        }
+        
+        // Complete fallback - don't move
+        return { x: 0, y: 0 };
     }
     
     checkPlayerCollision() {
@@ -160,6 +255,7 @@ export default class BasicZombie extends Phaser.Physics.Arcade.Sprite {
         this.setAlpha(1);
         this.setVelocity(0, 0);
         this.lastAttackTime = 0;
+        this.lastPathfindTime = 0;
     }
     
     destroy() {

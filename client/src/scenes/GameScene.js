@@ -26,6 +26,27 @@ export default class GameScene extends Phaser.Scene {
         this.load.image('crosshair', 'assets/crosshairs.png');
         this.load.image('zombie1', 'assets/zombie-1.png');
         this.load.audio('zombie-game', 'assets/zombie-game.mp3');
+        
+        // Load tile PNG assets
+        this.load.image('street-png', 'assets/tiles/tile-street.png');
+        this.load.image('sidewalk-png', 'assets/tiles/tile-sidewalk.png');
+        this.load.image('building-png', 'assets/tiles/tile-building.png');
+        this.load.image('park-png', 'assets/tiles/tile-park.png');
+        this.load.image('intersection-png', 'assets/tiles/tile-intersection.png');
+        this.load.image('residential-png', 'assets/tiles/tile-residential.png');
+        this.load.image('commercial-png', 'assets/tiles/tile-commercial.png');
+        this.load.image('industrial-png', 'assets/tiles/tile-industrial.png');
+        
+        // Handle load errors gracefully
+        this.load.on('loaderror', (file) => {
+            console.log(`⚠️  Asset not found, using fallback: ${file.src}`);
+        });
+        
+        this.load.on('filecomplete', (key, type, data) => {
+            if (key.endsWith('-png')) {
+                console.log(`✅ Loaded tile asset: ${key}`);
+            }
+        });
     }
 
     create() {
@@ -107,6 +128,13 @@ export default class GameScene extends Phaser.Scene {
             
             // Update crosshair position
             this.crosshair.setPosition(worldX, worldY);
+            
+            // Update crosshair color based on line of sight
+            if (this.tileMap && this.hasLineOfSight(this.player.x, this.player.y, worldX, worldY)) {
+                this.crosshair.setTint(0xffffff); // White - clear shot
+            } else {
+                this.crosshair.setTint(0xff4444); // Red - blocked shot
+            }
             
             // Player always faces mouse cursor
             const angle = Phaser.Math.Angle.Between(
@@ -205,6 +233,35 @@ export default class GameScene extends Phaser.Scene {
             velocityY = speed;
         }
 
+        // Check collision with buildings before moving
+        if (this.tileMap) {
+            const futureX = this.player.x + (velocityX * this.game.loop.delta / 1000);
+            const futureY = this.player.y + (velocityY * this.game.loop.delta / 1000);
+            
+            // Check collision in X direction
+            if (velocityX !== 0 && !this.tileMap.isWalkable(futureX, this.player.y)) {
+                velocityX = 0;
+            }
+            
+            // Check collision in Y direction
+            if (velocityY !== 0 && !this.tileMap.isWalkable(this.player.x, futureY)) {
+                velocityY = 0;
+            }
+            
+            // Check diagonal collision
+            if (velocityX !== 0 && velocityY !== 0 && !this.tileMap.isWalkable(futureX, futureY)) {
+                // If diagonal is blocked, try each axis separately
+                if (this.tileMap.isWalkable(futureX, this.player.y)) {
+                    velocityY = 0;
+                } else if (this.tileMap.isWalkable(this.player.x, futureY)) {
+                    velocityX = 0;
+                } else {
+                    velocityX = 0;
+                    velocityY = 0;
+                }
+            }
+        }
+
         this.player.setVelocity(velocityX, velocityY);
     }
 
@@ -242,10 +299,23 @@ export default class GameScene extends Phaser.Scene {
             const worldX = pointer.x + this.cameras.main.scrollX;
             const worldY = pointer.y + this.cameras.main.scrollY;
             this.crosshair.setPosition(worldX, worldY);
+            
+            // Update crosshair color based on line of sight
+            if (this.tileMap && this.hasLineOfSight(this.player.x, this.player.y, worldX, worldY)) {
+                this.crosshair.setTint(0xffffff); // White - clear shot
+            } else {
+                this.crosshair.setTint(0xff4444); // Red - blocked shot
+            }
         }
     }
 
     shoot(targetX, targetY) {
+        // Check line of sight before firing
+        if (this.tileMap && !this.hasLineOfSight(this.player.x, this.player.y, targetX, targetY)) {
+            // Don't fire if there's a building in the way
+            return;
+        }
+        
         // Get bullet from pool or create new one
         let bullet = this.bullets.getFirstDead();
         
@@ -259,6 +329,24 @@ export default class GameScene extends Phaser.Scene {
         
         // Add shooting sound effect here later
         // this.sound.play('gunshot');
+    }
+    
+    // Check if there's a clear line of sight between two points
+    hasLineOfSight(startX, startY, endX, endY) {
+        const distance = Phaser.Math.Distance.Between(startX, startY, endX, endY);
+        const steps = Math.ceil(distance / 16); // Check every 16 pixels
+        
+        for (let i = 0; i <= steps; i++) {
+            const t = i / steps;
+            const checkX = startX + (endX - startX) * t;
+            const checkY = startY + (endY - startY) * t;
+            
+            if (!this.tileMap.isWalkable(checkX, checkY)) {
+                return false; // Line of sight blocked
+            }
+        }
+        
+        return true; // Clear line of sight
     }
 
     spawnZombie() {
@@ -292,6 +380,13 @@ export default class GameScene extends Phaser.Scene {
                 x = cameraLeft - 50;
                 y = Phaser.Math.Between(cameraTop, cameraBottom);
                 break;
+        }
+        
+        // Find walkable spawn position
+        if (this.tileMap && !this.tileMap.isWalkable(x, y)) {
+            const walkablePos = this.tileMap.getNearestWalkablePosition(x, y);
+            x = walkablePos.x;
+            y = walkablePos.y;
         }
         
         // Get zombie from pool or create new one

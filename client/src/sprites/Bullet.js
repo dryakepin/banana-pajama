@@ -64,6 +64,12 @@ export default class Bullet extends Phaser.Physics.Arcade.Sprite {
     update() {
         if (!this.active) return;
         
+        // Check collision with buildings
+        if (this.scene.tileMap && !this.scene.tileMap.isWalkable(this.x, this.y)) {
+            this.destroy();
+            return;
+        }
+        
         // Check if bullet is far from camera view (world coordinates)
         const camera = this.scene.cameras.main;
         const cameraLeft = camera.scrollX - 100;
