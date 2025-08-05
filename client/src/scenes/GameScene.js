@@ -537,9 +537,9 @@ export default class GameScene extends Phaser.Scene {
             
             // Flip sprite based on crosshair position and adjust rotation
             if (worldX < this.player.x) {
-                // Crosshair is to the left - flip sprite vertically and mirror the angle
+                // Crosshair is to the left - flip sprite vertically to face left
                 this.player.setFlipY(true);
-                this.player.setRotation(-angle);
+                this.player.setRotation(angle);
             } else {
                 // Crosshair is to the right - normal orientation
                 this.player.setFlipY(false);
@@ -581,9 +581,9 @@ export default class GameScene extends Phaser.Scene {
         
         // Flip sprite based on crosshair position and adjust rotation
         if (worldX < this.player.x) {
-            // Crosshair is to the left - flip sprite vertically and mirror the angle
+            // Crosshair is to the left - flip sprite vertically to face left
             this.player.setFlipY(true);
-            this.player.setRotation(-angle);
+            this.player.setRotation(angle);
         } else {
             // Crosshair is to the right - normal orientation
             this.player.setFlipY(false);

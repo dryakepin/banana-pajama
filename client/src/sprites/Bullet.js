@@ -31,6 +31,7 @@ export default class Bullet extends Phaser.Physics.Arcade.Sprite {
         this.active = false;
         this.targetX = 0;
         this.targetY = 0;
+        this.destroyTimer = null;
     }
     
     fire(startX, startY, targetX, targetY) {
@@ -56,7 +57,12 @@ export default class Bullet extends Phaser.Physics.Arcade.Sprite {
         // Calculate time to reach target and set up destruction timer
         const timeToTarget = (distance / this.speed) * 1000; // Convert to milliseconds
         
-        this.scene.time.delayedCall(timeToTarget, () => {
+        // Clear any existing timer
+        if (this.destroyTimer) {
+            this.destroyTimer.remove();
+        }
+        
+        this.destroyTimer = this.scene.time.delayedCall(timeToTarget, () => {
             this.destroy();
         });
     }
@@ -85,14 +91,18 @@ export default class Bullet extends Phaser.Physics.Arcade.Sprite {
     
     destroy() {
         this.active = false;
+        
+        // Stop any movement
+        this.setVelocity(0, 0);
+        
+        // Reset to pool (Phaser group will handle this automatically)
         this.setActive(false);
         this.setVisible(false);
         
-        // Return to pool or actually destroy
-        if (this.scene && this.scene.bulletPool) {
-            this.scene.bulletPool.releaseObject(this);
-        } else {
-            super.destroy();
+        // Clear any pending timers
+        if (this.destroyTimer) {
+            this.destroyTimer.remove();
+            this.destroyTimer = null;
         }
     }
 }
