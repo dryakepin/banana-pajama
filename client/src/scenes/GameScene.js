@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import Bullet from '../sprites/Bullet.js';
 import BasicZombie from '../sprites/BasicZombie.js';
 import TankZombie from '../sprites/TankZombie.js';
+import PowerUp from '../sprites/PowerUp.js';
 import TileMap from '../world/TileMap.js';
 import VirtualJoystick from '../ui/VirtualJoystick.js';
 
@@ -17,6 +18,7 @@ export default class GameScene extends Phaser.Scene {
         this.bullets = null;
         this.zombies = null;
         this.tankZombies = null;
+        this.powerUps = null;
         this.zombieSpawnTimer = null;
         this.tankZombieSpawnTimer = null;
         this.zombieSpawnRate = 2000; // Start spawning every 2 seconds
@@ -29,6 +31,14 @@ export default class GameScene extends Phaser.Scene {
         this.aimingPointerId = null;   // Track which pointer is aiming
         this.lastShotTime = 0; // Track when last shot was fired
         this.shotCooldown = 400; // 400ms between shots
+        
+        // Power-up states
+        this.isInvincible = false;
+        this.invincibilityEndTime = 0;
+        this.rapidFireActive = false;
+        this.rapidFireEndTime = 0;
+        this.dualShotActive = false;
+        this.dualShotEndTime = 0;
     }
 
     preload() {
@@ -38,6 +48,14 @@ export default class GameScene extends Phaser.Scene {
         this.load.image('zombie1', 'assets/zombie-1.png');
         this.load.image('zombie2', 'assets/zombie-2.png');
         this.load.audio('zombie-game', 'assets/zombie-game.mp3');
+        
+        // Load power-up assets with fallback handling
+        this.load.image('powerup-healing', 'assets/powerups/healing.png');
+        this.load.image('powerup-invincibility', 'assets/powerups/invincibility.png');
+        this.load.image('powerup-pointBoost', 'assets/powerups/pointBoost.png');
+        this.load.image('powerup-rapidFire', 'assets/powerups/rapidFire.png');
+        this.load.image('powerup-dualShot', 'assets/powerups/dualShot.png');
+        this.load.image('powerup-killAll', 'assets/powerups/killAll.png');
         
         // Load tile PNG assets
         this.load.image('street-png', 'assets/tiles/tile-street.png');
@@ -52,13 +70,20 @@ export default class GameScene extends Phaser.Scene {
         // Handle load errors gracefully
         this.load.on('loaderror', (file) => {
             console.log(`⚠️  Asset not found, using fallback: ${file.src}`);
+            console.log(`Failed to load: ${file.key}`);
         });
         
         this.load.on('filecomplete', (key, type, data) => {
             if (key.endsWith('-png')) {
                 console.log(`✅ Loaded tile asset: ${key}`);
             }
+            if (key.startsWith('powerup-')) {
+                console.log(`✅ Loaded power-up asset: ${key}`);
+            }
         });
+        
+        // Assets are fully loaded when preload completes - Phaser handles this automatically
+        console.log('🎯 Preload phase completed - all assets guaranteed to be loaded');
     }
 
     create() {
@@ -143,9 +168,17 @@ export default class GameScene extends Phaser.Scene {
             runChildUpdate: true
         });
 
+        // Create power-ups group
+        this.powerUps = this.physics.add.group({
+            classType: PowerUp,
+            maxSize: 20, // Limit number of power-ups on screen
+            runChildUpdate: true
+        });
+
         // Set up collision detection
         this.physics.add.overlap(this.bullets, this.zombies, this.bulletHitZombie, null, this);
         this.physics.add.overlap(this.bullets, this.tankZombies, this.bulletHitTankZombie, null, this);
+        this.physics.add.overlap(this.player, this.powerUps, this.playerPickupPowerUp, null, this);
 
         // Hide default cursor and use custom crosshair
         this.input.setDefaultCursor('none');
@@ -253,6 +286,7 @@ export default class GameScene extends Phaser.Scene {
     update() {
         this.handleMovement();
         this.updateUI();
+        this.updatePowerUps();
         
         // Only update crosshair automatically on desktop
         if (!this.isMobile) {
@@ -367,9 +401,10 @@ export default class GameScene extends Phaser.Scene {
     }
 
     shoot(targetX, targetY) {
-        // Check shot cooldown
+        // Check shot cooldown (modified by rapid fire)
         const currentTime = this.time.now;
-        if (currentTime - this.lastShotTime < this.shotCooldown) {
+        const effectiveCooldown = this.rapidFireActive ? this.shotCooldown / 2 : this.shotCooldown;
+        if (currentTime - this.lastShotTime < effectiveCooldown) {
             return; // Still in cooldown, don't fire
         }
         
@@ -389,6 +424,21 @@ export default class GameScene extends Phaser.Scene {
         
         // Fire bullet from player position to target
         bullet.fire(this.player.x, this.player.y, targetX, targetY);
+        
+        // Dual shot - fire second bullet with slight offset
+        if (this.dualShotActive) {
+            this.time.delayedCall(50, () => {
+                let secondBullet = this.bullets.getFirstDead();
+                if (!secondBullet) {
+                    secondBullet = new Bullet(this, 0, 0);
+                    this.bullets.add(secondBullet);
+                }
+                // Slight offset for second bullet
+                const offsetX = Math.random() * 20 - 10;
+                const offsetY = Math.random() * 20 - 10;
+                secondBullet.fire(this.player.x, this.player.y, targetX + offsetX, targetY + offsetY);
+            });
+        }
         
         // Update last shot time
         this.lastShotTime = currentTime;
@@ -716,6 +766,12 @@ export default class GameScene extends Phaser.Scene {
     }
 
     damagePlayer(damage) {
+        // Check invincibility
+        if (this.isInvincible) {
+            console.log('Player is invincible - no damage taken');
+            return;
+        }
+        
         this.hp -= damage;
         
         // Clamp HP to 0-100 range
@@ -779,4 +835,99 @@ export default class GameScene extends Phaser.Scene {
             time: this.gameTime 
         });
     }
+    
+    // Power-up system methods
+    updatePowerUps() {
+        const currentTime = this.time.now;
+        
+        // Check power-up expiration
+        if (this.isInvincible && currentTime > this.invincibilityEndTime) {
+            this.isInvincible = false;
+            console.log('Invincibility expired');
+        }
+        
+        if (this.rapidFireActive && currentTime > this.rapidFireEndTime) {
+            this.rapidFireActive = false;
+            console.log('Rapid fire expired');
+        }
+        
+        if (this.dualShotActive && currentTime > this.dualShotEndTime) {
+            this.dualShotActive = false;
+            console.log('Dual shot expired');
+        }
+    }
+    
+    spawnPowerUp(x, y, type) {
+        // Get power-up from pool or create new one
+        let powerUp = this.powerUps.getFirstDead();
+        if (!powerUp) {
+            powerUp = new PowerUp(this, x, y, type);
+            this.powerUps.add(powerUp);
+        } else {
+            powerUp.reset(x, y, type);
+        }
+        
+        console.log(`Spawned ${type} power-up at (${x}, ${y})`);
+    }
+    
+    playerPickupPowerUp(player, powerUp) {
+        if (!powerUp.isActive) return;
+        
+        powerUp.pickup(player);
+        console.log(`Player picked up ${powerUp.powerUpType} power-up`);
+    }
+    
+    // Power-up effect methods
+    healPlayer(amount) {
+        this.hp = Math.min(100, this.hp + amount);
+        console.log(`Player healed for ${amount} HP. Current HP: ${this.hp}`);
+    }
+    
+    makePlayerInvincible(duration) {
+        this.isInvincible = true;
+        this.invincibilityEndTime = this.time.now + duration;
+        console.log(`Player is invincible for ${duration/1000} seconds`);
+        
+        // Visual feedback - make player blink
+        this.player.setTint(0x88ff88);
+        this.time.delayedCall(duration, () => {
+            if (!this.isInvincible) {
+                this.player.clearTint();
+            }
+        });
+    }
+    
+    activateRapidFire(duration) {
+        this.rapidFireActive = true;
+        this.rapidFireEndTime = this.time.now + duration;
+        console.log(`Rapid fire active for ${duration/1000} seconds`);
+    }
+    
+    activateDualShot(duration) {
+        this.dualShotActive = true;
+        this.dualShotEndTime = this.time.now + duration;
+        console.log(`Dual shot active for ${duration/1000} seconds`);
+    }
+    
+    killAllZombies() {
+        console.log('Kill all zombies activated!');
+        
+        // Kill all basic zombies
+        this.zombies.children.entries.forEach(zombie => {
+            if (zombie.active && !zombie.isDead) {
+                zombie.die();
+            }
+        });
+        
+        // Kill all tank zombies
+        this.tankZombies.children.entries.forEach(zombie => {
+            if (zombie.active && !zombie.isDead) {
+                zombie.die();
+            }
+        });
+        
+        // Screen flash effect
+        this.cameras.main.flash(300, 255, 255, 255);
+    }
+    
 }

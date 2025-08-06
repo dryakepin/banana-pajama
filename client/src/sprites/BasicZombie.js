@@ -243,6 +243,16 @@ export default class BasicZombie extends Phaser.Physics.Arcade.Sprite {
         // Add score to player
         this.scene.addScore(this.scoreValue);
         
+        // Basic zombie power-up drops based on updated spec
+        const dropChance = Math.random();
+        if (dropChance < 0.15) {
+            // 15% chance for point boost (from all zombie types)
+            this.scene.spawnPowerUp(this.x, this.y, 'pointBoost');
+        } else if (dropChance < 0.25) {
+            // 10% chance for dual shot (from all zombie types)
+            this.scene.spawnPowerUp(this.x, this.y, 'dualShot');
+        }
+        
         // Remove after short delay
         this.scene.time.delayedCall(500, () => {
             this.destroy();

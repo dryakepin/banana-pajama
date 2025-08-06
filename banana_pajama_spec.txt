@@ -54,6 +54,7 @@ Et top-down zombie survival spil hvor spilleren kontrollerer en banan i pyjamas 
 - Øget spawn rate over tid
 - Zombier navigerer omkring bygninger og forhindringer i den store verden
 - Despawner automatisk når de kommer for langt væk fra spilleren
+- **Item drops**: Visse zombie-typer dropper items når de dør (lav sandsynlighed)
 
 ## Spillemekanik
 
@@ -62,12 +63,14 @@ Et top-down zombie survival spil hvor spilleren kontrollerer en banan i pyjamas 
 - WASD eller piletaster: Bevægelse (verden bevæger sig omkring den centrerede spiller)
 - Mus: Sigte og skyde (automatisk skydning mod muspil)
 - Eller: Automatisk skydning mod nærmeste zombie
+- **Space-tast**: Pause spillet
 
 **Mobil:**
 - Virtual joystick til bevægelse (venstre side) - verden scroller
 - Automatisk skydning mod nærmeste zombie
 - Alternativt: Tap for at sigte og skyde
 - Spilleren forbliver altid i skærmens center
+- **Pause knap**: Øverste højre hjørne af skærmen
 
 ### Spillerens Sundhed:
 - Starter med 100 HP
@@ -87,13 +90,23 @@ Et top-down zombie survival spil hvor spilleren kontrollerer en banan i pyjamas 
 
 ### In-Game HUD:
 ```
-[HP: ████████░░] [Score: 1,250] [Time: 02:34]
+[HP: ████████░░] [Score: 1,250] [Time: 02:34]    [II] (pause - kun mobil)
 ```
 
 - **HP Bar**: Rød/grøn gradient bar (øverst venstre)
 - **Score**: Numerisk display (øverst midt)
-- **Timer**: MM:SS format (øverst højre)
+- **Timer**: MM:SS format (øverst højre, desktop) eller (midt, mobil)
+- **Pause knap**: "II" ikon (øverst højre hjørne, kun mobil)
 - **Mobile tilpasning**: Større ikoner og tekst
+- **Power-up indikatorer**: Vises under HP bar når aktive
+
+### Pause Dialog:
+- **Baggrund**: Semi-transparent overlay over spillet
+- **Dialog box**: Centreret på skærmen
+- **Knapper**: 
+  - "Press here to resume" (fortsæt spillet)
+  - "Back to menu" (afslut spillet og gå til hovedmenu)
+- **Aktivering**: Space-tast (desktop) eller pause-knap (mobil)
 
 ### Menu System:
 
@@ -111,6 +124,59 @@ Et top-down zombie survival spil hvor spilleren kontrollerer en banan i pyjamas 
 - Input felt for navn (hvis top 10)
 - Knapper: "Try Again", "Main Menu"
 
+## Power-up System
+
+### Item Drops:
+Items dukker op når visse zombie-typer dør med lav sandsynlighed (5-15% afhængig af zombie-type). Spilleren samler items ved at gå hen over dem.
+
+### Power-up Typer:
+
+#### **Healing** 🥙
+- **Effekt**: Genopret fuld hit points (100 HP)
+- **Ikon**: Kebab
+- **Varighed**: Øjeblikkelig
+- **Spawn rate**: 5% fra Tank Zombies
+
+#### **Usårlighed** 🛡️
+- **Effekt**: Spilleren tager ingen skade i 10 sekunder
+- **Ikon**: Skjold
+- **Varighed**: 10 sekunder
+- **Visual feedback**: Spilleren blinker/glower
+- **Spawn rate**: 15% fra Tank Zombies
+
+#### **Point Boost** 🪙
+- **Effekt**: +50, +100 eller +150 points
+- **Ikon**: Guldmønt med point nummer indeni
+- **Varighed**: Øjeblikkelig
+- **Spawn rate**: 15% fra alle zombie typer
+
+#### **Rapid Fire** 💥
+- **Effekt**: Dobbelt skudkadence i 15 sekunder
+- **Ikon**: Skud/kugle
+- **Varighed**: 15 sekunder
+- **Visual feedback**: Våben-ikon blinker
+- **Spawn rate**: 8% fra Hurtige Zombies
+
+#### **Dual Shot** 🔫🔫
+- **Effekt**: To skud samtidigt med kort mellemrum i 15 sekunder
+- **Ikon**: To skud/kugler
+- **Varighed**: 15 sekunder
+- **Visual feedback**: Dobbelt muzzle flash
+- **Spawn rate**: 10% fra alle zombie typer
+
+#### **Kill All** ☠️
+- **Effekt**: Alle synlige zombier dør øjeblikkeligt
+- **Ikon**: Dødningehoved
+- **Varighed**: Øjeblikkelig
+- **Score bonus**: Normal points for hver dræbt zombie
+- **Spawn rate**: 4% fra Tank Zombies (sjældent)
+
+### Power-up Mekanik:
+- Items forsvinder efter 30 sekunder hvis ikke samlet op
+- Kun et power-up af samme type kan være aktivt ad gangen
+- Hvis spilleren samler det samme power-up igen, forlænges/nulstilles timeren
+- Power-up status vises som ikoner under HP baren
+
 ## Lyddesign og Atmosfære
 
 ### Baggrunds Musik:
@@ -119,6 +185,7 @@ Et top-down zombie survival spil hvor spilleren kontrollerer en banan i pyjamas 
 - **Instrumenter**: Synthesizere, mørke pads, sparsomme perkussion
 - **Loop**: Kontinuerlig musik der ikke distraherer fra gameplay
 - **Volume**: Lav nok til at andre lyde kan høres tydeligt
+- **Pause funktion**: Musik pauses når spillet pauses
 
 ### Lydeffekter:
 - **Pistolskud**: Kraftig, skarp lyd med muligt ekko
@@ -127,11 +194,16 @@ Et top-down zombie survival spil hvor spilleren kontrollerer en banan i pyjamas 
 - **Spillerens død**: Dramatisk uhyggelig akkord/sting
 - **Footsteps**: Subtile fodtrin på asfalt (spilleren)
 - **Ambient lyde**: Vind, fjerne bylyde for at forstærke atmosfæren
+- **Power-up lyde**:
+  - Item pickup: Positiv "ding" lyd
+  - Power-up activation: Unikt lyd for hver type
+  - Power-up expiry: Subtil "whoosh" når effekten ophører
 
 ### Audio Implementation:
 - **3D Audio**: Lyde bliver svagere med afstand (især zombie spawns)
 - **Layering**: Flere lydeffekter kan spille samtidigt
 - **Volume kontrol**: Mulighed for at justere musik vs. lydeffekter
+- **Pause state**: Alle lyde pauses undtagen UI lyde
 
 ## Tekniske Specifikationer
 
@@ -186,6 +258,9 @@ banana-zombie-shooter/
 - **Sprites**: Banan karakter, zombier, våben, baggrund tiles (mørke/dystre farver)
   - Format: PNG med alpha transparency
   - Størrelse: Optimeret til både desktop og mobil (32x32 til 64x64 pixels)
+- **Power-up ikoner**: Kebab, skjold, guldmønt med tal, skud, dobbelt-skud, dødningehoved
+  - Format: PNG, 32x32 pixels
+  - Animationer: Subtle glow/pulse effekt
 - **Animationer**: Gang, skydning, død, banana split transformation
   - Format: Sprite sheets eller individuelle frames
 - **Lyde**: 
@@ -194,7 +269,8 @@ banana-zombie-shooter/
   - **Zombie spawn lyd**: Knasende lyd som chips der knuses med hammer
   - **Zombie dødslyde**: Våde/knasende lyde
   - **Game over lyd**: Dramatisk/uhyggelig akkord
-- **UI elementer**: Knapper, HP bar, font til score/timer (mørkt tema)
+  - **Power-up lyde**: Pickup, activation, expiry lyde for hver type
+- **UI elementer**: Knapper, HP bar, pause dialog, font til score/timer (mørkt tema)
 - **Asset Hosting**: AWS S3 + CloudFront for hurtig global distribution
 
 ### Data Lagring:
