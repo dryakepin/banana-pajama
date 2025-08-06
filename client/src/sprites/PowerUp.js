@@ -50,7 +50,8 @@ export default class PowerUp extends Phaser.Physics.Arcade.Sprite {
             if (texture && texture.source && texture.source[0] && texture.source[0].width > 0) {
                 this.setTexture(textureKey);
                 this.usingActualAsset = true;
-                this.clearTint(); // Don't tint actual assets
+                this.clearTint(); // Ensure no tint on actual assets
+                this.setAlpha(1.0); // Ensure full opacity
                 console.log(`✅ Using actual asset for ${this.powerUpType}`);
                 return;
             }
@@ -114,19 +115,19 @@ export default class PowerUp extends Phaser.Physics.Arcade.Sprite {
         const pulseSpeed = 2000; // 2 second cycle
         const pulseIntensity = Math.sin(this.pulseTimer / pulseSpeed * Math.PI * 2);
         
-        // Only apply tinting to fallback textures, not actual assets
+        // Only apply visual effects to fallback textures, NEVER to actual assets
         if (!this.usingActualAsset) {
-            // Interpolate between base and glow tint for fallback textures only
-            const tintFactor = (pulseIntensity + 1) * 0.3; // 0 to 0.6
-            this.setTint(Phaser.Display.Color.Interpolate.ColorWithColor(
-                Phaser.Display.Color.ValueToColor(this.baseTint),
-                Phaser.Display.Color.ValueToColor(this.glowTint),
-                1,
-                tintFactor
-            ));
+            // Simple tint pulsing for fallback textures only
+            const tintIntensity = 0.8 + pulseIntensity * 0.2; // 0.6 to 1.0
+            this.setTint(this.glowTint);
+            this.setAlpha(tintIntensity);
+        } else {
+            // For actual assets, ensure no tinting is ever applied
+            this.clearTint();
+            this.setAlpha(1.0);
         }
         
-        // Slight scale pulse for all power-ups
+        // Slight scale pulse for all power-ups (this is safe for all textures)
         const scalePulse = 0.8 + pulseIntensity * 0.1; // 0.7 to 0.9
         this.setScale(scalePulse);
     }
@@ -207,6 +208,7 @@ export default class PowerUp extends Phaser.Physics.Arcade.Sprite {
         this.setVisible(true);
         this.setActive(true);
         this.clearTint(); // Clear any existing tint
+        this.setAlpha(1.0); // Reset to full opacity
         
         // Clear old timer
         if (this.lifetimeTimer) {

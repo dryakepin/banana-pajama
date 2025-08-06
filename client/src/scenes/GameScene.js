@@ -44,6 +44,9 @@ export default class GameScene extends Phaser.Scene {
         this.isPaused = false;
         this.pauseDialog = null;
         this.pauseButton = null;
+        
+        // Power-up indicators
+        this.powerUpIndicators = {};
     }
 
     preload() {
@@ -276,6 +279,9 @@ export default class GameScene extends Phaser.Scene {
             color: '#ffffff'
         }).setScrollFactor(0);
 
+        // Power-up indicators (below HP bar)
+        this.createPowerUpIndicators();
+
         // Score
         this.scoreText = this.add.text(width / 2, 30, 'Score: 0', {
             fontSize: '18px',
@@ -322,6 +328,7 @@ export default class GameScene extends Phaser.Scene {
         this.handleMovement();
         this.updateUI();
         this.updatePowerUps();
+        this.updatePowerUpIndicators();
         
         // Only update crosshair automatically on desktop
         if (!this.isMobile) {
@@ -923,6 +930,9 @@ export default class GameScene extends Phaser.Scene {
         this.invincibilityEndTime = this.time.now + duration;
         console.log(`Player is invincible for ${duration/1000} seconds`);
         
+        // Show power-up indicator
+        this.showPowerUpIndicator('invincibility', duration);
+        
         // Visual feedback - make player blink
         this.player.setTint(0x88ff88);
         this.time.delayedCall(duration, () => {
@@ -936,12 +946,18 @@ export default class GameScene extends Phaser.Scene {
         this.rapidFireActive = true;
         this.rapidFireEndTime = this.time.now + duration;
         console.log(`Rapid fire active for ${duration/1000} seconds`);
+        
+        // Show power-up indicator
+        this.showPowerUpIndicator('rapidFire', duration);
     }
     
     activateDualShot(duration) {
         this.dualShotActive = true;
         this.dualShotEndTime = this.time.now + duration;
         console.log(`Dual shot active for ${duration/1000} seconds`);
+        
+        // Show power-up indicator
+        this.showPowerUpIndicator('dualShot', duration);
     }
     
     killAllZombies() {
@@ -1103,6 +1119,130 @@ export default class GameScene extends Phaser.Scene {
             this.pauseDialog.clear(true, true);
             this.pauseDialog = null;
         }
+    }
+    
+    // Power-up indicator system
+    createPowerUpIndicators() {
+        // Position indicators below HP bar
+        const indicatorY = 55; // Below HP bar at y=30+20
+        const iconSize = 20;
+        const spacing = 25;
+        let startX = 20; // Align with HP label
+        
+        // Create indicator slots for each power-up type
+        const powerUpTypes = ['invincibility', 'rapidFire', 'dualShot'];
+        
+        powerUpTypes.forEach((type, index) => {
+            const x = startX + (index * spacing);
+            
+            // Create icon background (initially hidden)
+            const bg = this.add.rectangle(x + iconSize/2, indicatorY, iconSize + 4, iconSize + 4, 0x333333, 0.8);
+            bg.setScrollFactor(0);
+            bg.setVisible(false);
+            
+            // Create the icon (try to use actual power-up texture, fallback to text)
+            let icon;
+            const textureKey = `powerup-${type}`;
+            if (this.textures.exists(textureKey)) {
+                icon = this.add.image(x + iconSize/2, indicatorY, textureKey);
+                icon.setScale(iconSize / 32); // Assuming 32px source images
+            } else {
+                // Fallback to emoji/text icons
+                const iconText = this.getPowerUpEmoji(type);
+                icon = this.add.text(x + iconSize/2, indicatorY, iconText, {
+                    fontSize: '16px',
+                    fontFamily: 'Arial, sans-serif'
+                }).setOrigin(0.5);
+            }
+            
+            icon.setScrollFactor(0);
+            icon.setVisible(false);
+            
+            // Timer text (shows remaining time)
+            const timerText = this.add.text(x + iconSize/2, indicatorY + 15, '', {
+                fontSize: '10px',
+                fontFamily: 'Courier New, monospace',
+                color: '#ffffff',
+                align: 'center'
+            }).setOrigin(0.5).setScrollFactor(0);
+            timerText.setVisible(false);
+            
+            // Store references
+            this.powerUpIndicators[type] = {
+                background: bg,
+                icon: icon,
+                timer: timerText,
+                isVisible: false
+            };
+        });
+    }
+    
+    getPowerUpEmoji(type) {
+        const emojis = {
+            'invincibility': '🛡️',
+            'rapidFire': '💥', 
+            'dualShot': '🔫'
+        };
+        return emojis[type] || '?';
+    }
+    
+    showPowerUpIndicator(type, duration) {
+        const indicator = this.powerUpIndicators[type];
+        if (!indicator) return;
+        
+        indicator.background.setVisible(true);
+        indicator.icon.setVisible(true);
+        indicator.timer.setVisible(true);
+        indicator.isVisible = true;
+        indicator.endTime = this.time.now + duration;
+        
+        // Add subtle pulse effect
+        this.tweens.add({
+            targets: [indicator.background, indicator.icon],
+            scaleX: 1.2,
+            scaleY: 1.2,
+            duration: 200,
+            ease: 'Power2',
+            yoyo: true
+        });
+    }
+    
+    hidePowerUpIndicator(type) {
+        const indicator = this.powerUpIndicators[type];
+        if (!indicator) return;
+        
+        indicator.background.setVisible(false);
+        indicator.icon.setVisible(false);
+        indicator.timer.setVisible(false);
+        indicator.isVisible = false;
+    }
+    
+    updatePowerUpIndicators() {
+        const currentTime = this.time.now;
+        
+        // Update each indicator
+        Object.keys(this.powerUpIndicators).forEach(type => {
+            const indicator = this.powerUpIndicators[type];
+            if (indicator.isVisible && indicator.endTime) {
+                const remainingTime = Math.max(0, indicator.endTime - currentTime);
+                
+                if (remainingTime <= 0) {
+                    this.hidePowerUpIndicator(type);
+                } else {
+                    // Update timer display
+                    const seconds = Math.ceil(remainingTime / 1000);
+                    indicator.timer.setText(seconds.toString());
+                    
+                    // Flash when almost expired (last 3 seconds)
+                    if (seconds <= 3) {
+                        const flashAlpha = Math.sin(currentTime / 100) * 0.5 + 0.5; // 0.0 to 1.0
+                        indicator.icon.setAlpha(0.5 + flashAlpha * 0.5);
+                    } else {
+                        indicator.icon.setAlpha(1.0);
+                    }
+                }
+            }
+        });
     }
     
 }
