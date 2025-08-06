@@ -39,6 +39,11 @@ export default class GameScene extends Phaser.Scene {
         this.rapidFireEndTime = 0;
         this.dualShotActive = false;
         this.dualShotEndTime = 0;
+        
+        // Pause system
+        this.isPaused = false;
+        this.pauseDialog = null;
+        this.pauseButton = null;
     }
 
     preload() {
@@ -226,8 +231,8 @@ export default class GameScene extends Phaser.Scene {
 
         // Instructions (different for mobile vs desktop)
         const instructionText = this.isMobile ? 
-            'Touch & hold to create joystick • Second finger to aim & shoot' :
-            'WASD to move • Mouse to aim • Click to shoot • ESC for menu';
+            'Touch & hold to create joystick • Second finger to aim & shoot • Tap ⏸ to pause' :
+            'WASD to move • Mouse to aim • Click to shoot • SPACE to pause • ESC for menu';
             
         const fontSize = this.isMobile ? '16px' : '14px'; // Larger text on mobile
         
@@ -245,6 +250,11 @@ export default class GameScene extends Phaser.Scene {
                 this.backgroundMusic.stop();
             }
             this.scene.start('MenuScene');
+        });
+        
+        // SPACE to pause/unpause (desktop only)
+        this.input.keyboard.on('keydown-SPACE', () => {
+            this.togglePause();
         });
 
         // Start background music
@@ -274,16 +284,41 @@ export default class GameScene extends Phaser.Scene {
             align: 'center'
         }).setOrigin(0.5).setScrollFactor(0);
 
-        // Timer
-        this.timerText = this.add.text(width - 20, 30, 'Time: 00:00', {
+        // Timer (adjust position based on mobile/desktop)
+        const timerX = this.isMobile ? width / 2 : width - 20;
+        const timerY = this.isMobile ? 60 : 30;
+        const timerAlign = this.isMobile ? 'center' : 'right';
+        const timerOriginX = this.isMobile ? 0.5 : 1;
+        
+        this.timerText = this.add.text(timerX, timerY, 'Time: 00:00', {
             fontSize: '16px',
             fontFamily: 'Courier New, monospace',
             color: '#ffffff',
-            align: 'right'
-        }).setOrigin(1, 0).setScrollFactor(0);
+            align: timerAlign
+        }).setOrigin(timerOriginX, 0).setScrollFactor(0);
+        
+        // Mobile pause button (top-right corner)
+        if (this.isMobile) {
+            this.pauseButton = this.add.text(width - 20, 30, '⏸', {
+                fontSize: '24px',
+                fontFamily: 'Arial, sans-serif',
+                color: '#ffffff',
+                align: 'center'
+            }).setOrigin(1, 0).setScrollFactor(0);
+            
+            this.pauseButton.setInteractive({ useHandCursor: true });
+            this.pauseButton.on('pointerdown', () => {
+                this.togglePause();
+            });
+        }
     }
 
     update() {
+        // Don't update game logic if paused
+        if (this.isPaused) {
+            return;
+        }
+        
         this.handleMovement();
         this.updateUI();
         this.updatePowerUps();
@@ -928,6 +963,146 @@ export default class GameScene extends Phaser.Scene {
         
         // Screen flash effect
         this.cameras.main.flash(300, 255, 255, 255);
+    }
+    
+    // Pause system methods
+    togglePause() {
+        if (this.isPaused) {
+            this.resumeGame();
+        } else {
+            this.pauseGame();
+        }
+    }
+    
+    pauseGame() {
+        this.isPaused = true;
+        
+        // Pause physics
+        this.physics.world.pause();
+        
+        // Pause background music
+        if (this.backgroundMusic && this.backgroundMusic.isPlaying) {
+            this.backgroundMusic.pause();
+        }
+        
+        // Stop all timers
+        this.time.paused = true;
+        
+        // Show pause dialog
+        this.showPauseDialog();
+        
+        console.log('Game paused');
+    }
+    
+    resumeGame() {
+        this.isPaused = false;
+        
+        // Resume physics
+        this.physics.world.resume();
+        
+        // Resume background music
+        if (this.backgroundMusic && this.backgroundMusic.isPaused) {
+            this.backgroundMusic.resume();
+        }
+        
+        // Resume timers
+        this.time.paused = false;
+        
+        // Hide pause dialog
+        this.hidePauseDialog();
+        
+        console.log('Game resumed');
+    }
+    
+    showPauseDialog() {
+        const { width, height } = this.cameras.main;
+        
+        // Semi-transparent overlay
+        this.pauseDialog = this.add.group();
+        
+        const overlay = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.7);
+        overlay.setScrollFactor(0);
+        this.pauseDialog.add(overlay);
+        
+        // Dialog box with border
+        const dialogBorder = this.add.rectangle(width / 2, height / 2, 404, 254, 0xffffff, 1);
+        dialogBorder.setScrollFactor(0);
+        this.pauseDialog.add(dialogBorder);
+        
+        const dialogBg = this.add.rectangle(width / 2, height / 2, 400, 250, 0x333333, 0.9);
+        dialogBg.setScrollFactor(0);
+        this.pauseDialog.add(dialogBg);
+        
+        // Pause title
+        const pauseTitle = this.add.text(width / 2, height / 2 - 80, 'GAME PAUSED', {
+            fontSize: '32px',
+            fontFamily: 'Courier New, monospace',
+            color: '#ffffff',
+            align: 'center'
+        }).setOrigin(0.5).setScrollFactor(0);
+        this.pauseDialog.add(pauseTitle);
+        
+        // Resume button
+        const resumeButton = this.add.text(width / 2, height / 2 - 20, 'Press here to resume', {
+            fontSize: '18px',
+            fontFamily: 'Courier New, monospace',
+            color: '#44ff44',
+            align: 'center'
+        }).setOrigin(0.5).setScrollFactor(0);
+        resumeButton.setInteractive({ useHandCursor: true });
+        resumeButton.on('pointerdown', () => {
+            this.resumeGame();
+        });
+        resumeButton.on('pointerover', () => {
+            resumeButton.setColor('#88ff88');
+        });
+        resumeButton.on('pointerout', () => {
+            resumeButton.setColor('#44ff44');
+        });
+        this.pauseDialog.add(resumeButton);
+        
+        // Back to menu button
+        const menuButton = this.add.text(width / 2, height / 2 + 40, 'Back to menu', {
+            fontSize: '18px',
+            fontFamily: 'Courier New, monospace',
+            color: '#ff4444',
+            align: 'center'
+        }).setOrigin(0.5).setScrollFactor(0);
+        menuButton.setInteractive({ useHandCursor: true });
+        menuButton.on('pointerdown', () => {
+            // Stop game music before returning to menu
+            if (this.backgroundMusic) {
+                this.backgroundMusic.stop();
+            }
+            this.scene.start('MenuScene');
+        });
+        menuButton.on('pointerover', () => {
+            menuButton.setColor('#ff8888');
+        });
+        menuButton.on('pointerout', () => {
+            menuButton.setColor('#ff4444');
+        });
+        this.pauseDialog.add(menuButton);
+        
+        // Instructions for resuming
+        const instructions = this.isMobile ? 
+            'Tap "Press here to resume" or the ⏸ button' :
+            'Press SPACE or click "Press here to resume"';
+            
+        const instructionText = this.add.text(width / 2, height / 2 + 80, instructions, {
+            fontSize: '14px',
+            fontFamily: 'Courier New, monospace',
+            color: '#888888',
+            align: 'center'
+        }).setOrigin(0.5).setScrollFactor(0);
+        this.pauseDialog.add(instructionText);
+    }
+    
+    hidePauseDialog() {
+        if (this.pauseDialog) {
+            this.pauseDialog.clear(true, true);
+            this.pauseDialog = null;
+        }
     }
     
 }
