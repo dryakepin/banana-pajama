@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import Bullet from '../sprites/Bullet.js';
 import BasicZombie from '../sprites/BasicZombie.js';
 import TankZombie from '../sprites/TankZombie.js';
+import PowerUp from '../sprites/PowerUp.js';
 import TileMap from '../world/TileMap.js';
 import VirtualJoystick from '../ui/VirtualJoystick.js';
 
@@ -17,6 +18,7 @@ export default class GameScene extends Phaser.Scene {
         this.bullets = null;
         this.zombies = null;
         this.tankZombies = null;
+        this.powerUps = null;
         this.zombieSpawnTimer = null;
         this.tankZombieSpawnTimer = null;
         this.zombieSpawnRate = 2000; // Start spawning every 2 seconds
@@ -29,6 +31,22 @@ export default class GameScene extends Phaser.Scene {
         this.aimingPointerId = null;   // Track which pointer is aiming
         this.lastShotTime = 0; // Track when last shot was fired
         this.shotCooldown = 400; // 400ms between shots
+        
+        // Power-up states
+        this.isInvincible = false;
+        this.invincibilityEndTime = 0;
+        this.rapidFireActive = false;
+        this.rapidFireEndTime = 0;
+        this.dualShotActive = false;
+        this.dualShotEndTime = 0;
+        
+        // Pause system
+        this.isPaused = false;
+        this.pauseDialog = null;
+        this.pauseButton = null;
+        
+        // Power-up indicators
+        this.powerUpIndicators = {};
     }
 
     preload() {
@@ -38,6 +56,14 @@ export default class GameScene extends Phaser.Scene {
         this.load.image('zombie1', 'assets/zombie-1.png');
         this.load.image('zombie2', 'assets/zombie-2.png');
         this.load.audio('zombie-game', 'assets/zombie-game.mp3');
+        
+        // Load power-up assets with fallback handling
+        this.load.image('powerup-healing', 'assets/powerups/healing.png');
+        this.load.image('powerup-invincibility', 'assets/powerups/invincibility.png');
+        this.load.image('powerup-pointBoost', 'assets/powerups/pointBoost.png');
+        this.load.image('powerup-rapidFire', 'assets/powerups/rapidFire.png');
+        this.load.image('powerup-dualShot', 'assets/powerups/dualShot.png');
+        this.load.image('powerup-killAll', 'assets/powerups/killAll.png');
         
         // Load tile PNG assets
         this.load.image('street-png', 'assets/tiles/tile-street.png');
@@ -52,13 +78,20 @@ export default class GameScene extends Phaser.Scene {
         // Handle load errors gracefully
         this.load.on('loaderror', (file) => {
             console.log(`⚠️  Asset not found, using fallback: ${file.src}`);
+            console.log(`Failed to load: ${file.key}`);
         });
         
         this.load.on('filecomplete', (key, type, data) => {
             if (key.endsWith('-png')) {
                 console.log(`✅ Loaded tile asset: ${key}`);
             }
+            if (key.startsWith('powerup-')) {
+                console.log(`✅ Loaded power-up asset: ${key}`);
+            }
         });
+        
+        // Assets are fully loaded when preload completes - Phaser handles this automatically
+        console.log('🎯 Preload phase completed - all assets guaranteed to be loaded');
     }
 
     create() {
@@ -143,9 +176,17 @@ export default class GameScene extends Phaser.Scene {
             runChildUpdate: true
         });
 
+        // Create power-ups group
+        this.powerUps = this.physics.add.group({
+            classType: PowerUp,
+            maxSize: 20, // Limit number of power-ups on screen
+            runChildUpdate: true
+        });
+
         // Set up collision detection
         this.physics.add.overlap(this.bullets, this.zombies, this.bulletHitZombie, null, this);
         this.physics.add.overlap(this.bullets, this.tankZombies, this.bulletHitTankZombie, null, this);
+        this.physics.add.overlap(this.player, this.powerUps, this.playerPickupPowerUp, null, this);
 
         // Hide default cursor and use custom crosshair
         this.input.setDefaultCursor('none');
@@ -193,8 +234,8 @@ export default class GameScene extends Phaser.Scene {
 
         // Instructions (different for mobile vs desktop)
         const instructionText = this.isMobile ? 
-            'Touch & hold to create joystick • Second finger to aim & shoot' :
-            'WASD to move • Mouse to aim • Click to shoot • ESC for menu';
+            'Touch & hold to create joystick • Second finger to aim & shoot • Tap ⏸ to pause' :
+            'WASD to move • Mouse to aim • Click to shoot • SPACE to pause • ESC for menu';
             
         const fontSize = this.isMobile ? '16px' : '14px'; // Larger text on mobile
         
@@ -212,6 +253,11 @@ export default class GameScene extends Phaser.Scene {
                 this.backgroundMusic.stop();
             }
             this.scene.start('MenuScene');
+        });
+        
+        // SPACE to pause/unpause (desktop only)
+        this.input.keyboard.on('keydown-SPACE', () => {
+            this.togglePause();
         });
 
         // Start background music
@@ -233,6 +279,9 @@ export default class GameScene extends Phaser.Scene {
             color: '#ffffff'
         }).setScrollFactor(0);
 
+        // Power-up indicators (below HP bar)
+        this.createPowerUpIndicators();
+
         // Score
         this.scoreText = this.add.text(width / 2, 30, 'Score: 0', {
             fontSize: '18px',
@@ -241,18 +290,45 @@ export default class GameScene extends Phaser.Scene {
             align: 'center'
         }).setOrigin(0.5).setScrollFactor(0);
 
-        // Timer
-        this.timerText = this.add.text(width - 20, 30, 'Time: 00:00', {
+        // Timer (adjust position based on mobile/desktop)
+        const timerX = this.isMobile ? width / 2 : width - 20;
+        const timerY = this.isMobile ? 60 : 30;
+        const timerAlign = this.isMobile ? 'center' : 'right';
+        const timerOriginX = this.isMobile ? 0.5 : 1;
+        
+        this.timerText = this.add.text(timerX, timerY, 'Time: 00:00', {
             fontSize: '16px',
             fontFamily: 'Courier New, monospace',
             color: '#ffffff',
-            align: 'right'
-        }).setOrigin(1, 0).setScrollFactor(0);
+            align: timerAlign
+        }).setOrigin(timerOriginX, 0).setScrollFactor(0);
+        
+        // Mobile pause button (top-right corner)
+        if (this.isMobile) {
+            this.pauseButton = this.add.text(width - 20, 30, '⏸', {
+                fontSize: '24px',
+                fontFamily: 'Arial, sans-serif',
+                color: '#ffffff',
+                align: 'center'
+            }).setOrigin(1, 0).setScrollFactor(0);
+            
+            this.pauseButton.setInteractive({ useHandCursor: true });
+            this.pauseButton.on('pointerdown', () => {
+                this.togglePause();
+            });
+        }
     }
 
     update() {
+        // Don't update game logic if paused
+        if (this.isPaused) {
+            return;
+        }
+        
         this.handleMovement();
         this.updateUI();
+        this.updatePowerUps();
+        this.updatePowerUpIndicators();
         
         // Only update crosshair automatically on desktop
         if (!this.isMobile) {
@@ -367,9 +443,10 @@ export default class GameScene extends Phaser.Scene {
     }
 
     shoot(targetX, targetY) {
-        // Check shot cooldown
+        // Check shot cooldown (modified by rapid fire)
         const currentTime = this.time.now;
-        if (currentTime - this.lastShotTime < this.shotCooldown) {
+        const effectiveCooldown = this.rapidFireActive ? this.shotCooldown / 2 : this.shotCooldown;
+        if (currentTime - this.lastShotTime < effectiveCooldown) {
             return; // Still in cooldown, don't fire
         }
         
@@ -389,6 +466,21 @@ export default class GameScene extends Phaser.Scene {
         
         // Fire bullet from player position to target
         bullet.fire(this.player.x, this.player.y, targetX, targetY);
+        
+        // Dual shot - fire second bullet with slight offset
+        if (this.dualShotActive) {
+            this.time.delayedCall(50, () => {
+                let secondBullet = this.bullets.getFirstDead();
+                if (!secondBullet) {
+                    secondBullet = new Bullet(this, 0, 0);
+                    this.bullets.add(secondBullet);
+                }
+                // Slight offset for second bullet
+                const offsetX = Math.random() * 20 - 10;
+                const offsetY = Math.random() * 20 - 10;
+                secondBullet.fire(this.player.x, this.player.y, targetX + offsetX, targetY + offsetY);
+            });
+        }
         
         // Update last shot time
         this.lastShotTime = currentTime;
@@ -716,6 +808,12 @@ export default class GameScene extends Phaser.Scene {
     }
 
     damagePlayer(damage) {
+        // Check invincibility
+        if (this.isInvincible) {
+            console.log('Player is invincible - no damage taken');
+            return;
+        }
+        
         this.hp -= damage;
         
         // Clamp HP to 0-100 range
@@ -779,4 +877,372 @@ export default class GameScene extends Phaser.Scene {
             time: this.gameTime 
         });
     }
+    
+    // Power-up system methods
+    updatePowerUps() {
+        const currentTime = this.time.now;
+        
+        // Check power-up expiration
+        if (this.isInvincible && currentTime > this.invincibilityEndTime) {
+            this.isInvincible = false;
+            console.log('Invincibility expired');
+        }
+        
+        if (this.rapidFireActive && currentTime > this.rapidFireEndTime) {
+            this.rapidFireActive = false;
+            console.log('Rapid fire expired');
+        }
+        
+        if (this.dualShotActive && currentTime > this.dualShotEndTime) {
+            this.dualShotActive = false;
+            console.log('Dual shot expired');
+        }
+    }
+    
+    spawnPowerUp(x, y, type) {
+        // Get power-up from pool or create new one
+        let powerUp = this.powerUps.getFirstDead();
+        if (!powerUp) {
+            powerUp = new PowerUp(this, x, y, type);
+            this.powerUps.add(powerUp);
+        } else {
+            powerUp.reset(x, y, type);
+        }
+        
+        console.log(`Spawned ${type} power-up at (${x}, ${y})`);
+    }
+    
+    playerPickupPowerUp(player, powerUp) {
+        if (!powerUp.isActive) return;
+        
+        powerUp.pickup(player);
+        console.log(`Player picked up ${powerUp.powerUpType} power-up`);
+    }
+    
+    // Power-up effect methods
+    healPlayer(amount) {
+        this.hp = Math.min(100, this.hp + amount);
+        console.log(`Player healed for ${amount} HP. Current HP: ${this.hp}`);
+    }
+    
+    makePlayerInvincible(duration) {
+        this.isInvincible = true;
+        this.invincibilityEndTime = this.time.now + duration;
+        console.log(`Player is invincible for ${duration/1000} seconds`);
+        
+        // Show power-up indicator
+        this.showPowerUpIndicator('invincibility', duration);
+        
+        // Visual feedback - make player blink
+        this.player.setTint(0x88ff88);
+        this.time.delayedCall(duration, () => {
+            if (!this.isInvincible) {
+                this.player.clearTint();
+            }
+        });
+    }
+    
+    activateRapidFire(duration) {
+        this.rapidFireActive = true;
+        this.rapidFireEndTime = this.time.now + duration;
+        console.log(`Rapid fire active for ${duration/1000} seconds`);
+        
+        // Show power-up indicator
+        this.showPowerUpIndicator('rapidFire', duration);
+    }
+    
+    activateDualShot(duration) {
+        this.dualShotActive = true;
+        this.dualShotEndTime = this.time.now + duration;
+        console.log(`Dual shot active for ${duration/1000} seconds`);
+        
+        // Show power-up indicator
+        this.showPowerUpIndicator('dualShot', duration);
+    }
+    
+    killAllZombies() {
+        console.log('Kill all zombies activated!');
+        
+        // Kill all basic zombies
+        this.zombies.children.entries.forEach(zombie => {
+            if (zombie.active && !zombie.isDead) {
+                zombie.die();
+            }
+        });
+        
+        // Kill all tank zombies
+        this.tankZombies.children.entries.forEach(zombie => {
+            if (zombie.active && !zombie.isDead) {
+                zombie.die();
+            }
+        });
+        
+        // Screen flash effect
+        this.cameras.main.flash(300, 255, 255, 255);
+    }
+    
+    // Pause system methods
+    togglePause() {
+        if (this.isPaused) {
+            this.resumeGame();
+        } else {
+            this.pauseGame();
+        }
+    }
+    
+    pauseGame() {
+        this.isPaused = true;
+        
+        // Pause physics
+        this.physics.world.pause();
+        
+        // Pause background music
+        if (this.backgroundMusic && this.backgroundMusic.isPlaying) {
+            this.backgroundMusic.pause();
+        }
+        
+        // Stop all timers
+        this.time.paused = true;
+        
+        // Show pause dialog
+        this.showPauseDialog();
+        
+        console.log('Game paused');
+    }
+    
+    resumeGame() {
+        this.isPaused = false;
+        
+        // Resume physics
+        this.physics.world.resume();
+        
+        // Resume background music
+        if (this.backgroundMusic && this.backgroundMusic.isPaused) {
+            this.backgroundMusic.resume();
+        }
+        
+        // Resume timers
+        this.time.paused = false;
+        
+        // Hide pause dialog
+        this.hidePauseDialog();
+        
+        console.log('Game resumed');
+    }
+    
+    showPauseDialog() {
+        const { width, height } = this.cameras.main;
+        
+        // Semi-transparent overlay
+        this.pauseDialog = this.add.group();
+        
+        const overlay = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.7);
+        overlay.setScrollFactor(0);
+        this.pauseDialog.add(overlay);
+        
+        // Dialog box with border
+        const dialogBorder = this.add.rectangle(width / 2, height / 2, 404, 254, 0xffffff, 1);
+        dialogBorder.setScrollFactor(0);
+        this.pauseDialog.add(dialogBorder);
+        
+        const dialogBg = this.add.rectangle(width / 2, height / 2, 400, 250, 0x333333, 0.9);
+        dialogBg.setScrollFactor(0);
+        this.pauseDialog.add(dialogBg);
+        
+        // Pause title
+        const pauseTitle = this.add.text(width / 2, height / 2 - 80, 'GAME PAUSED', {
+            fontSize: '32px',
+            fontFamily: 'Courier New, monospace',
+            color: '#ffffff',
+            align: 'center'
+        }).setOrigin(0.5).setScrollFactor(0);
+        this.pauseDialog.add(pauseTitle);
+        
+        // Resume button
+        const resumeButton = this.add.text(width / 2, height / 2 - 20, 'Press here to resume', {
+            fontSize: '18px',
+            fontFamily: 'Courier New, monospace',
+            color: '#44ff44',
+            align: 'center'
+        }).setOrigin(0.5).setScrollFactor(0);
+        resumeButton.setInteractive({ useHandCursor: true });
+        resumeButton.on('pointerdown', () => {
+            this.resumeGame();
+        });
+        resumeButton.on('pointerover', () => {
+            resumeButton.setColor('#88ff88');
+        });
+        resumeButton.on('pointerout', () => {
+            resumeButton.setColor('#44ff44');
+        });
+        this.pauseDialog.add(resumeButton);
+        
+        // Back to menu button
+        const menuButton = this.add.text(width / 2, height / 2 + 40, 'Back to menu', {
+            fontSize: '18px',
+            fontFamily: 'Courier New, monospace',
+            color: '#ff4444',
+            align: 'center'
+        }).setOrigin(0.5).setScrollFactor(0);
+        menuButton.setInteractive({ useHandCursor: true });
+        menuButton.on('pointerdown', () => {
+            // Stop game music before returning to menu
+            if (this.backgroundMusic) {
+                this.backgroundMusic.stop();
+            }
+            this.scene.start('MenuScene');
+        });
+        menuButton.on('pointerover', () => {
+            menuButton.setColor('#ff8888');
+        });
+        menuButton.on('pointerout', () => {
+            menuButton.setColor('#ff4444');
+        });
+        this.pauseDialog.add(menuButton);
+        
+        // Instructions for resuming
+        const instructions = this.isMobile ? 
+            'Tap "Press here to resume" or the ⏸ button' :
+            'Press SPACE or click "Press here to resume"';
+            
+        const instructionText = this.add.text(width / 2, height / 2 + 80, instructions, {
+            fontSize: '14px',
+            fontFamily: 'Courier New, monospace',
+            color: '#888888',
+            align: 'center'
+        }).setOrigin(0.5).setScrollFactor(0);
+        this.pauseDialog.add(instructionText);
+    }
+    
+    hidePauseDialog() {
+        if (this.pauseDialog) {
+            this.pauseDialog.clear(true, true);
+            this.pauseDialog = null;
+        }
+    }
+    
+    // Power-up indicator system
+    createPowerUpIndicators() {
+        // Position indicators below HP bar
+        const indicatorY = 55; // Below HP bar at y=30+20
+        const iconSize = 20;
+        const spacing = 25;
+        let startX = 20; // Align with HP label
+        
+        // Create indicator slots for each power-up type
+        const powerUpTypes = ['invincibility', 'rapidFire', 'dualShot'];
+        
+        powerUpTypes.forEach((type, index) => {
+            const x = startX + (index * spacing);
+            
+            // Create icon background (initially hidden)
+            const bg = this.add.rectangle(x + iconSize/2, indicatorY, iconSize + 4, iconSize + 4, 0x333333, 0.8);
+            bg.setScrollFactor(0);
+            bg.setVisible(false);
+            
+            // Create the icon (try to use actual power-up texture, fallback to text)
+            let icon;
+            const textureKey = `powerup-${type}`;
+            if (this.textures.exists(textureKey)) {
+                icon = this.add.image(x + iconSize/2, indicatorY, textureKey);
+                icon.setScale(iconSize / 32); // Assuming 32px source images
+            } else {
+                // Fallback to emoji/text icons
+                const iconText = this.getPowerUpEmoji(type);
+                icon = this.add.text(x + iconSize/2, indicatorY, iconText, {
+                    fontSize: '16px',
+                    fontFamily: 'Arial, sans-serif'
+                }).setOrigin(0.5);
+            }
+            
+            icon.setScrollFactor(0);
+            icon.setVisible(false);
+            
+            // Timer text (shows remaining time)
+            const timerText = this.add.text(x + iconSize/2, indicatorY + 15, '', {
+                fontSize: '10px',
+                fontFamily: 'Courier New, monospace',
+                color: '#ffffff',
+                align: 'center'
+            }).setOrigin(0.5).setScrollFactor(0);
+            timerText.setVisible(false);
+            
+            // Store references
+            this.powerUpIndicators[type] = {
+                background: bg,
+                icon: icon,
+                timer: timerText,
+                isVisible: false
+            };
+        });
+    }
+    
+    getPowerUpEmoji(type) {
+        const emojis = {
+            'invincibility': '🛡️',
+            'rapidFire': '💥', 
+            'dualShot': '🔫'
+        };
+        return emojis[type] || '?';
+    }
+    
+    showPowerUpIndicator(type, duration) {
+        const indicator = this.powerUpIndicators[type];
+        if (!indicator) return;
+        
+        indicator.background.setVisible(true);
+        indicator.icon.setVisible(true);
+        indicator.timer.setVisible(true);
+        indicator.isVisible = true;
+        indicator.endTime = this.time.now + duration;
+        
+        // Add subtle pulse effect
+        this.tweens.add({
+            targets: [indicator.background, indicator.icon],
+            scaleX: 1.2,
+            scaleY: 1.2,
+            duration: 200,
+            ease: 'Power2',
+            yoyo: true
+        });
+    }
+    
+    hidePowerUpIndicator(type) {
+        const indicator = this.powerUpIndicators[type];
+        if (!indicator) return;
+        
+        indicator.background.setVisible(false);
+        indicator.icon.setVisible(false);
+        indicator.timer.setVisible(false);
+        indicator.isVisible = false;
+    }
+    
+    updatePowerUpIndicators() {
+        const currentTime = this.time.now;
+        
+        // Update each indicator
+        Object.keys(this.powerUpIndicators).forEach(type => {
+            const indicator = this.powerUpIndicators[type];
+            if (indicator.isVisible && indicator.endTime) {
+                const remainingTime = Math.max(0, indicator.endTime - currentTime);
+                
+                if (remainingTime <= 0) {
+                    this.hidePowerUpIndicator(type);
+                } else {
+                    // Update timer display
+                    const seconds = Math.ceil(remainingTime / 1000);
+                    indicator.timer.setText(seconds.toString());
+                    
+                    // Flash when almost expired (last 3 seconds)
+                    if (seconds <= 3) {
+                        const flashAlpha = Math.sin(currentTime / 100) * 0.5 + 0.5; // 0.0 to 1.0
+                        indicator.icon.setAlpha(0.5 + flashAlpha * 0.5);
+                    } else {
+                        indicator.icon.setAlpha(1.0);
+                    }
+                }
+            }
+        });
+    }
+    
 }

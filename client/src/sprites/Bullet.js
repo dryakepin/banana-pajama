@@ -29,9 +29,6 @@ export default class Bullet extends Phaser.Physics.Arcade.Sprite {
         this.speed = 600;
         this.damage = 1; // 1 damage per shot
         this.active = false;
-        this.targetX = 0;
-        this.targetY = 0;
-        this.destroyTimer = null;
     }
     
     fire(startX, startY, targetX, targetY) {
@@ -40,31 +37,14 @@ export default class Bullet extends Phaser.Physics.Arcade.Sprite {
         this.setVisible(true);
         this.active = true;
         
-        // Store target position
-        this.targetX = targetX;
-        this.targetY = targetY;
-        
-        // Calculate direction and velocity
-        const distance = Phaser.Math.Distance.Between(startX, startY, targetX, targetY);
+        // Calculate direction and set velocity
         const angle = Phaser.Math.Angle.Between(startX, startY, targetX, targetY);
         
-        // Set velocity towards target
+        // Set velocity towards target direction (bullets continue indefinitely)
         this.setVelocity(
             Math.cos(angle) * this.speed,
             Math.sin(angle) * this.speed
         );
-        
-        // Calculate time to reach target and set up destruction timer
-        const timeToTarget = (distance / this.speed) * 1000; // Convert to milliseconds
-        
-        // Clear any existing timer
-        if (this.destroyTimer) {
-            this.destroyTimer.remove();
-        }
-        
-        this.destroyTimer = this.scene.time.delayedCall(timeToTarget, () => {
-            this.destroy();
-        });
     }
     
     update() {
@@ -98,11 +78,5 @@ export default class Bullet extends Phaser.Physics.Arcade.Sprite {
         // Reset to pool (Phaser group will handle this automatically)
         this.setActive(false);
         this.setVisible(false);
-        
-        // Clear any pending timers
-        if (this.destroyTimer) {
-            this.destroyTimer.remove();
-            this.destroyTimer = null;
-        }
     }
 }

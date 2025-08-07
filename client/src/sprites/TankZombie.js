@@ -275,6 +275,22 @@ export default class TankZombie extends Phaser.Physics.Arcade.Sprite {
         // Add score to player (higher score for tank)
         this.scene.addScore(this.scoreValue);
         
+        // Tank zombies have better power-up drops based on updated spec
+        const dropChance = Math.random();
+        if (dropChance < 0.05) {
+            // 5% chance for healing
+            this.scene.spawnPowerUp(this.x, this.y, 'healing');
+        } else if (dropChance < 0.20) {
+            // 15% chance for invincibility  
+            this.scene.spawnPowerUp(this.x, this.y, 'invincibility');
+        } else if (dropChance < 0.24) {
+            // 4% chance for kill all (rare)
+            this.scene.spawnPowerUp(this.x, this.y, 'killAll');
+        } else if (dropChance < 0.34) {
+            // 10% chance for dual shot
+            this.scene.spawnPowerUp(this.x, this.y, 'dualShot');
+        }
+        
         // Remove after longer delay (tank is bigger, takes longer to disappear)
         this.scene.time.delayedCall(800, () => {
             this.destroy();
