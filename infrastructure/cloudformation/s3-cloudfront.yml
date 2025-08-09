@@ -1,0 +1,303 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'S3 and CloudFront for static assets - Banana Pajama Zombie Shooter'
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: banana-pajama
+    Description: Name of the project
+  
+  Environment:
+    Type: String
+    Default: production
+    AllowedValues: [development, staging, production]
+    Description: Environment name
+
+  DomainName:
+    Type: String
+    Default: ""
+    Description: Custom domain name for CloudFront (optional)
+
+Conditions:
+  HasCustomDomain: !Not [!Equals [!Ref DomainName, ""]]
+
+Resources:
+  # S3 Bucket for Static Assets
+  StaticAssetsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${ProjectName}-${Environment}-assets-${AWS::AccountId}"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteIncompleteMultipartUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+          - Id: DeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 30
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-assets"
+        - Key: Environment
+          Value: !Ref Environment
+
+  # CloudFront Origin Access Control
+  OriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub "${ProjectName}-${Environment}-oac"
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  # CloudFront Distribution
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Comment: !Sub "${ProjectName} ${Environment} - Static Assets CDN"
+        Enabled: true
+        DefaultRootObject: index.html
+        
+        # Origins
+        Origins:
+          - Id: S3Origin
+            DomainName: !GetAtt StaticAssetsBucket.RegionalDomainName
+            S3OriginConfig:
+              OriginAccessIdentity: ""
+            OriginAccessControlId: !GetAtt OriginAccessControl.Id
+        
+        # Default Cache Behavior
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          CachedMethods:
+            - GET
+            - HEAD
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+          Compress: true
+          DefaultTTL: 86400      # 1 day
+          MaxTTL: 31536000       # 1 year
+          MinTTL: 0
+        
+        # Cache Behaviors for different file types
+        CacheBehaviors:
+          # Game assets (images, sounds) - long cache
+          - PathPattern: "assets/*"
+            TargetOriginId: S3Origin
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods: [GET, HEAD]
+            CachedMethods: [GET, HEAD]
+            ForwardedValues:
+              QueryString: false
+              Cookies:
+                Forward: none
+            Compress: true
+            DefaultTTL: 2592000    # 30 days
+            MaxTTL: 31536000       # 1 year
+            MinTTL: 2592000        # 30 days
+          
+          # JavaScript and CSS - medium cache
+          - PathPattern: "*.js"
+            TargetOriginId: S3Origin
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods: [GET, HEAD]
+            CachedMethods: [GET, HEAD]
+            ForwardedValues:
+              QueryString: false
+              Cookies:
+                Forward: none
+            Compress: true
+            DefaultTTL: 604800     # 7 days
+            MaxTTL: 31536000       # 1 year
+            MinTTL: 0
+          
+          - PathPattern: "*.css"
+            TargetOriginId: S3Origin
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods: [GET, HEAD]
+            CachedMethods: [GET, HEAD]
+            ForwardedValues:
+              QueryString: false
+              Cookies:
+                Forward: none
+            Compress: true
+            DefaultTTL: 604800     # 7 days
+            MaxTTL: 31536000       # 1 year
+            MinTTL: 0
+        
+        # Custom Error Pages
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 300
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 300
+        
+        # Geographic restrictions (none)
+        Restrictions:
+          GeoRestriction:
+            RestrictionType: none
+        
+        # SSL Certificate
+        ViewerCertificate: !If
+          - HasCustomDomain
+          - AcmCertificateArn: !Ref SSLCertificate
+            SslSupportMethod: sni-only
+            MinimumProtocolVersion: TLSv1.2_2021
+          - CloudFrontDefaultCertificate: true
+        
+        # Custom domain (if provided)
+        Aliases: !If
+          - HasCustomDomain
+          - [!Ref DomainName]
+          - !Ref AWS::NoValue
+        
+        # Price class (use all edge locations for production)
+        PriceClass: PriceClass_100
+        
+        # HTTP version
+        HttpVersion: http2
+        
+        # IPv6
+        IPV6Enabled: true
+        
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-cdn"
+        - Key: Environment
+          Value: !Ref Environment
+
+  # S3 Bucket Policy for CloudFront
+  BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref StaticAssetsBucket
+      PolicyDocument:
+        Statement:
+          - Sid: AllowCloudFrontServicePrincipal
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub "${StaticAssetsBucket}/*"
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub "arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}"
+
+  # SSL Certificate for custom domain (if provided)
+  SSLCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Condition: HasCustomDomain
+    Properties:
+      DomainName: !Ref DomainName
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Ref DomainName
+          HostedZoneId: !Ref AWS::NoValue
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-assets-ssl-cert"
+        - Key: Environment
+          Value: !Ref Environment
+
+  # CloudWatch Alarms
+  CloudFrontErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-${Environment}-cloudfront-error-rate-high"
+      AlarmDescription: CloudFront 4xx/5xx error rate is high
+      MetricName: 4xxErrorRate
+      Namespace: AWS/CloudFront
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: DistributionId
+          Value: !Ref CloudFrontDistribution
+      TreatMissingData: notBreaching
+
+  CloudFrontCacheHitRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-${Environment}-cloudfront-cache-hit-rate-low"
+      AlarmDescription: CloudFront cache hit rate is low
+      MetricName: CacheHitRate
+      Namespace: AWS/CloudFront
+      Statistic: Average
+      Period: 900
+      EvaluationPeriods: 2
+      Threshold: 70
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+        - Name: DistributionId
+          Value: !Ref CloudFrontDistribution
+      TreatMissingData: notBreaching
+
+# Conditions
+Conditions:
+  IsProduction: !Equals [!Ref Environment, production]
+  HasCustomDomain: !Not [!Equals [!Ref DomainName, ""]]
+
+Outputs:
+  StaticAssetsBucket:
+    Description: S3 bucket for static assets
+    Value: !Ref StaticAssetsBucket
+    Export:
+      Name: !Sub "${ProjectName}-${Environment}-assets-bucket"
+
+  StaticAssetsBucketDomain:
+    Description: S3 bucket domain name
+    Value: !GetAtt StaticAssetsBucket.RegionalDomainName
+    Export:
+      Name: !Sub "${ProjectName}-${Environment}-assets-bucket-domain"
+
+  CloudFrontDistribution:
+    Description: CloudFront distribution ID
+    Value: !Ref CloudFrontDistribution
+    Export:
+      Name: !Sub "${ProjectName}-${Environment}-cloudfront-distribution"
+
+  CloudFrontDomainName:
+    Description: CloudFront distribution domain name
+    Value: !GetAtt CloudFrontDistribution.DomainName
+    Export:
+      Name: !Sub "${ProjectName}-${Environment}-cloudfront-domain"
+
+  CloudFrontURL:
+    Description: CloudFront distribution URL
+    Value: !Sub "https://${CloudFrontDistribution.DomainName}"
+    Export:
+      Name: !Sub "${ProjectName}-${Environment}-cloudfront-url"
+
+  CustomDomainURL:
+    Description: Custom domain URL (if provided)
+    Condition: HasCustomDomain
+    Value: !Sub "https://${DomainName}"
+    Export:
+      Name: !Sub "${ProjectName}-${Environment}-custom-domain-url"

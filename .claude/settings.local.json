@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker-compose:*)",
+      "Bash(docker-compose up:*)",
+      "Bash(aws cloudformation:*)",
+      "Bash(./scripts/build-images.sh:*)",
+      "Bash(./scripts/push-images.sh:*)",
+      "Bash(chmod:*)",
+      "Bash(aws iam list-roles:*)",
+      "Bash(aws ecs register-task-definition:*)",
+      "Bash(aws ecs update-service:*)",
+      "Bash(aws ecs wait services-stable:*)",
+      "Bash(aws ecs describe-services:*)",
+      "Bash(aws ecs list-tasks:*)",
+      "Bash(aws ecs describe-tasks:*)",
+      "Bash(aws logs create-log-group:*)",
+      "Bash(aws logs describe-log-streams --log-group-name /ecs/banana-pajama-production-server --region us-east-1 --order-by LastEventTime --descending --max-items 1 --query 'logStreams[0].logStreamName' --output text)",
+      "Bash(aws logs get-log-events:*)",
+      "Bash(docker version:*)",
+      "Bash(docker build:*)",
+      "Bash(aws secretsmanager create-secret:*)",
+      "Bash(aws secretsmanager update-secret:*)",
+      "Bash(aws iam get-role-policy:*)",
+      "Bash(aws iam put-role-policy:*)",
+      "Bash(aws rds modify-db-instance:*)",
+      "Bash(aws rds wait:*)",
+      "Bash(aws ecs stop-task:*)",
+      "Bash(aws elbv2 describe-target-health:*)",
+      "Bash(curl:*)",
+      "Bash(git add:*)"
+    ],
+    "deny": []
+  }
+}

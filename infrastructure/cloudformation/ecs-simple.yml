@@ -1,0 +1,222 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Simple ECS Fargate deployment for Banana Pajama Zombie Shooter'
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: banana-pajama
+    Description: Name of the project
+  
+  Environment:
+    Type: String
+    Default: production
+    AllowedValues: [development, staging, production]
+    Description: Environment name
+
+  DatabasePassword:
+    Type: String
+    NoEcho: true
+    Description: Database password
+
+  SessionSecret:
+    Type: String
+    NoEcho: true
+    MinLength: 32
+    Description: Session secret for JWT tokens
+
+Resources:
+  # ECS Cluster
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub "${ProjectName}-${Environment}-cluster"
+      CapacityProviders:
+        - FARGATE
+      DefaultCapacityProviderStrategy:
+        - CapacityProvider: FARGATE
+          Weight: 1
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-cluster"
+        - Key: Environment
+          Value: !Ref Environment
+
+  # CloudWatch Log Groups
+  ServerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/ecs/${ProjectName}-${Environment}-server"
+      RetentionInDays: 7
+
+  ClientLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/ecs/${ProjectName}-${Environment}-client"
+      RetentionInDays: 7
+
+  # ECS Task Execution Role
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-ecs-execution-role"
+
+  # ECS Task Role
+  ECSTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+
+  # Simple Task Definition (just the game client for now)
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub "${ProjectName}-${Environment}-simple"
+      Cpu: 256
+      Memory: 512
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt ECSTaskRole.Arn
+      ContainerDefinitions:
+        # Game Client (Nginx serving static files)
+        - Name: client
+          Image: nginx:alpine
+          Essential: true
+          PortMappings:
+            - ContainerPort: 80
+              Protocol: tcp
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref ClientLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: client
+          Environment:
+            - Name: NGINX_PORT
+              Value: "80"
+          Command:
+            - /bin/sh
+            - -c
+            - |
+              echo '<html><body><h1>🍌 Banana Pajama Zombie Shooter</h1><p>Coming Soon! Infrastructure is deployed and ready.</p><p>Next steps: Build and push Docker images</p></body></html>' > /usr/share/nginx/html/index.html
+              nginx -g 'daemon off;'
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-task-definition"
+
+  # ECS Service
+  ECSService:
+    Type: AWS::ECS::Service
+    DependsOn: ALBListenerHTTP
+    Properties:
+      ServiceName: !Sub "${ProjectName}-${Environment}-service"
+      Cluster: !Ref ECSCluster
+      TaskDefinition: !Ref TaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          SecurityGroups:
+            - Fn::ImportValue: !Sub "${ProjectName}-${Environment}-ecs-sg-id"
+          Subnets:
+            - Fn::ImportValue: !Sub "${ProjectName}-${Environment}-public-subnet-1"
+            - Fn::ImportValue: !Sub "${ProjectName}-${Environment}-public-subnet-2"
+          AssignPublicIp: ENABLED
+      LoadBalancers:
+        - ContainerName: client
+          ContainerPort: 80
+          TargetGroupArn: !Ref ALBTargetGroup
+      HealthCheckGracePeriodSeconds: 60
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+
+  # Application Load Balancer
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub "${ProjectName}-${Environment}-alb"
+      Type: application
+      Scheme: internet-facing
+      SecurityGroups:
+        - Fn::ImportValue: !Sub "${ProjectName}-${Environment}-alb-sg-id"
+      Subnets:
+        - Fn::ImportValue: !Sub "${ProjectName}-${Environment}-public-subnet-1"
+        - Fn::ImportValue: !Sub "${ProjectName}-${Environment}-public-subnet-2"
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-alb"
+
+  # ALB Target Group
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub "${ProjectName}-${Environment}-tg"
+      Port: 80
+      Protocol: HTTP
+      VpcId:
+        Fn::ImportValue: !Sub "${ProjectName}-${Environment}-vpc-id"
+      TargetType: ip
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckIntervalSeconds: 30
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Matcher:
+        HttpCode: 200
+
+  # ALB Listener (HTTP only)
+  ALBListenerHTTP:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+Outputs:
+  ECSCluster:
+    Description: ECS Cluster Name
+    Value: !Ref ECSCluster
+
+  LoadBalancerURL:
+    Description: Application Load Balancer URL
+    Value: !Sub "http://${ApplicationLoadBalancer.DNSName}"
+
+  LoadBalancerDNS:
+    Description: Application Load Balancer DNS name
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+
+  ServiceName:
+    Description: ECS Service Name
+    Value: !Ref ECSService

@@ -169,13 +169,41 @@ docker-compose up --build
 docker-compose -f docker-compose.prod.yml up -d
 ```
 
-## 🚀 Deployment
+## 🚀 AWS Deployment
 
-The game is designed to deploy on AWS with:
-- **EC2** - Application servers
-- **RDS PostgreSQL** - Database
-- **S3 + CloudFront** - Static asset CDN
-- **Application Load Balancer** - Traffic distribution
+### Production Deployment
+
+Deploy to AWS using ECS Fargate with a single command:
+
+```bash
+# 1. Setup AWS account (first time only)
+./scripts/aws-account-setup.sh
+
+# 2. Deploy to AWS (interactive)
+./scripts/deploy-aws.sh
+```
+
+### AWS Architecture
+
+- **ECS Fargate** - Serverless container hosting with auto-scaling
+- **Application Load Balancer** - Traffic distribution and SSL termination  
+- **RDS PostgreSQL** - Managed database service (Multi-AZ for HA)
+- **S3 + CloudFront** - Global CDN for static assets and caching
+- **Certificate Manager** - Free SSL certificates
+- **Secrets Manager** - Secure credential storage
+
+### Cost Optimization
+
+Free tier eligible services minimize costs:
+- **ECS Fargate**: 400 vCPU hours/month free
+- **RDS db.t3.micro**: 750 hours/month free
+- **S3**: 5GB storage + 20,000 GET requests free
+- **CloudFront**: 50GB data transfer free
+- **Application Load Balancer**: 750 hours/month free
+
+**Estimated cost after free tier**: $15-25/month
+
+See [infrastructure/aws-setup.md](infrastructure/aws-setup.md) for detailed deployment guide.
 
 ## 🤝 Contributing
 
