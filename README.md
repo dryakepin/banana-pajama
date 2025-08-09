@@ -1,75 +1,64 @@
 # 🍌 Banana Pajama Zombie Shooter
 
-A dark and atmospheric top-down zombie survival game where you play as a banana in pajamas shooting zombies in a dystopian city. Built with Phaser.js and Node.js.
+A thrilling top-down zombie survival game where you control a banana in pajamas fighting zombies in a dark cityscape. Built with Phaser.js 3 and designed for both desktop and mobile platforms.
 
 ## 🎮 Game Features
 
-- **Top-down zombie survival** gameplay
-- **Dark atmospheric** city environment with moody lighting
-- **Cross-platform** support (desktop + mobile)
-- **Progressive difficulty** with increasing zombie spawn rates
-- **Multiple zombie types** with different behaviors
-- **High score system** with leaderboards
-- **Responsive controls** (WASD + mouse on desktop, virtual joystick on mobile)
+### 🍌 Player Character
+- Yellow banana wearing blue striped pajamas
+- 360-degree movement in top-down perspective
+- Armed with a powerful pistol
+- 100 HP survival system
 
-## 🏗️ Tech Stack
+### 🧟 Zombie Types
+- **Basic Zombie** (Green): 1 HP, 10 damage, slow movement
+- **Tank Zombie** (Dark): 5 HP, 25 damage, very slow, gets stunned when hit
+- **Fast Zombie** (Light Green): 1 HP, 15 damage, fast movement *(coming soon)*
 
-### Frontend
-- **Phaser.js 3** - HTML5 game framework
-- **Webpack** - Module bundler and dev server
-- **HTML5 Canvas** - Cross-platform rendering
+### 🎁 Power-up System
+- **Healing** 🥙: Full HP restoration
+- **Invincibility** 🛡️: 10 seconds of immunity
+- **Point Boost** 🪙: Instant score bonus (+50/100/150)
+- **Rapid Fire** 💥: Double firing rate for 15 seconds
+- **Dual Shot** 🔫🔫: Fire two bullets simultaneously for 15 seconds
+- **Kill All** ☠️: Instantly eliminate all visible zombies
 
-### Backend
-- **Node.js** - Server runtime
-- **Express.js** - Web framework
-- **PostgreSQL** - Database for high scores
-- **CORS & Helmet** - Security middleware
+### 🎯 Game Mechanics
+- **Desktop Controls**: WASD/Arrow keys to move, mouse to aim and shoot, SPACE to pause
+- **Mobile Controls**: Virtual joystick for movement, automatic targeting, pause button
+- **Progressive Difficulty**: Increasing spawn rates and zombie variety over time
+- **Persistent High Scores**: Global leaderboard system
+- **Power-up Indicators**: Visual countdown timers under HP bar
 
-### Deployment
-- **Docker** - Containerization
-- **AWS** - Cloud hosting (EC2, RDS, S3, CloudFront)
-- **Nginx** - Reverse proxy and static serving
-
-## 🚀 Quick Start
+## 🚀 Quick Start (Local Development)
 
 ### Prerequisites
-- Node.js 16+ 
-- npm or yarn
-- PostgreSQL (for database features)
+- **Docker Desktop** - [Download here](https://www.docker.com/products/docker-desktop)
+- **Git** - For cloning the repository
 
-### Development Setup
+### 1. Clone Repository
+```bash
+git clone https://github.com/dryakepin/banana-pajama.git
+cd banana-pajama
+```
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd banana-pajama
-   ```
+### 2. Start Development Environment
+```bash
+# Run the automated setup script
+./scripts/deploy-local.sh
 
-2. **Install dependencies**
-   ```bash
-   # Install client dependencies
-   cd client
-   npm install
-   
-   # Install server dependencies
-   cd ../server
-   npm install
-   ```
+# Or manually with Docker Compose
+cd docker
+docker-compose up -d
+```
 
-3. **Start development servers**
-   ```bash
-   # Start game client (port 3000)
-   cd client
-   npm run dev
-   
-   # Start API server (port 3001) - in another terminal
-   cd server
-   npm run dev
-   ```
-
-4. **Open the game**
-   - Navigate to `http://localhost:3000`
-   - The game should load with the menu screen
+### 3. Access the Game
+- 🎮 **Game**: http://localhost:8080
+- 🔧 **API**: http://localhost:3000
+- 📊 **Database Admin**: http://localhost:8081
+  - Server: `database`
+  - Username: `postgres`
+  - Password: `banana_dev_password`
 
 ## 🎯 Game Controls
 

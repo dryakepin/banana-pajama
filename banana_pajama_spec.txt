@@ -207,6 +207,22 @@ Items dukker op når visse zombie-typer dør med lav sandsynlighed (5-15% afhæn
 
 ## Tekniske Specifikationer
 
+### Deployment Arkitektur:
+
+#### Lokal Udvikling (MacBook Pro):
+- **Docker Desktop**: Containeriseret udviklingmiljø for konsistent setup
+- **Docker Compose**: Orkestrering af alle services lokalt
+- **Hot Reload**: Live opdatering under udvikling
+- **Lokale Databaser**: PostgreSQL container til udvikling og test
+- **Port Mapping**: Alle services tilgængelige via localhost
+
+#### Cloud Deployment (AWS - Fresh Account Setup):
+- **Infrastructure as Code**: AWS CloudFormation eller Terraform templates
+- **One-Click Deployment**: Automatiseret setup fra tom AWS konto
+- **Multi-Environment**: Dev, Staging, Production environments
+- **Auto-scaling**: Horizontal scaling baseret på trafik
+- **Monitoring**: Built-in CloudWatch logging og metrics
+
 ### Frontend Stack:
 - **Spilmotor**: Phaser.js 3 (gratis, open source HTML5 game framework)
 - **Platform**: HTML5 Canvas med cross-platform support
@@ -215,12 +231,15 @@ Items dukker op når visse zombie-typer dør med lav sandsynlighed (5-15% afhæn
 - **Performance**: 60 FPS på begge platforme
 - **Audio support**: Phaser Audio System med Web Audio API
 - **PWA**: Progressive Web App funktionalitet for mobile installation
+- **Build Process**: Webpack eller Vite for optimeret bundling
 
 ### Backend Stack:
 - **Server**: Node.js med Express.js framework
 - **Database**: PostgreSQL (robust, gratis, skalerbar)
 - **Web Proxy**: Nginx (reverse proxy, static file serving, SSL)
 - **Authentication**: Simple session-based (for high scores)
+- **Containerization**: Docker containers for alle services
+- **Environment Management**: Docker Compose (lokal) + AWS ECS/Fargate (cloud)
 
 ### Deployment Arkitektur:
 
@@ -230,12 +249,62 @@ Items dukker op når visse zombie-typer dør med lav sandsynlighed (5-15% afhæn
 - **VS Code**: Udviklings IDE
 - **Git**: Version control
 
-#### Cloud Deployment (AWS):
-- **Compute**: AWS EC2 t3.micro (gratis tier)
-- **Database**: AWS RDS PostgreSQL (gratis tier)
-- **Static Assets**: AWS S3 + CloudFront CDN
-- **Load Balancer**: AWS Application Load Balancer eller Nginx
-- **Monitoring**: AWS CloudWatch
+### AWS Cloud Arkitektur (Fresh Account Setup):
+
+#### Compute Layer:
+- **AWS ECS Fargate**: Serverless container hosting (auto-scaling)
+- **Application Load Balancer**: Traffic distribution og SSL termination
+- **AWS CloudFront**: Global CDN for static assets og caching
+
+#### Data Layer:
+- **AWS RDS PostgreSQL**: Managed database service (Multi-AZ for HA)
+- **AWS S3**: Static asset storage (billeder, lyde, builds)
+- **AWS ElastiCache Redis**: Session storage og high score caching (optional)
+
+#### Security & Networking:
+- **AWS VPC**: Isolated network environment
+- **Security Groups**: Firewall rules
+- **AWS Certificate Manager**: Free SSL certificates
+- **AWS IAM**: Role-based access control
+
+#### Monitoring & Logging:
+- **AWS CloudWatch**: Metrics, logs, og alarms
+- **AWS X-Ray**: Distributed tracing (optional)
+- **AWS Config**: Resource compliance monitoring
+
+#### CI/CD Pipeline:
+- **AWS CodeCommit**: Git repository (eller GitHub integration)
+- **AWS CodeBuild**: Automated building af Docker images
+- **AWS CodePipeline**: Deployment pipeline
+- **AWS ECR**: Container registry for Docker images
+
+### Environment Configuration:
+
+#### Lokal Development Environment:
+```bash
+# Quick start commands
+git clone <repository>
+cd banana-zombie-shooter
+cp docker/.env.example docker/.env
+./scripts/deploy-local.sh
+# Spil tilgængeligt på http://localhost:8080
+```
+
+#### AWS Production Environment:
+```bash
+# One-time AWS setup (ny konto)
+./scripts/aws-account-setup.sh
+./infrastructure/deploy.sh production
+# Spil tilgængeligt på https://yourdomain.com
+```
+
+### Cost Optimization (AWS Free Tier Maksimering):
+- **ECS Fargate**: 400 vCPU timer/måned gratis
+- **RDS**: db.t3.micro med 20GB storage gratis
+- **S3**: 5GB storage + 20,000 GET requests gratis
+- **CloudFront**: 50GB data transfer gratis
+- **Load Balancer**: 750 timer/måned gratis
+- **Estimeret månedlig omkostning efter free tier**: $15-25/måned
 
 ### Projektstruktur:
 ```
@@ -244,14 +313,34 @@ banana-zombie-shooter/
 │   ├── src/scenes/        # Game, Menu, GameOver scener
 │   ├── src/sprites/       # Banan, Zombie klasser
 │   ├── assets/            # Billeder, lyde, fonts
-│   └── dist/              # Built game files
+│   ├── dist/              # Built game files
+│   └── Dockerfile         # Frontend container
 ├── server/                # Node.js Express API
 │   ├── routes/api.js      # High score endpoints
 │   ├── models/            # Database modeller
-│   └── middleware/        # CORS, logging
-├── database/              # PostgreSQL migrations
-├── docker/                # Docker configuration
-└── infrastructure/        # AWS deployment scripts
+│   ├── middleware/        # CORS, logging
+│   └── Dockerfile         # Backend container
+├── nginx/                 # Reverse proxy configuration
+│   ├── nginx.conf         # Nginx konfiguration
+│   └── Dockerfile         # Nginx container
+├── database/              # PostgreSQL setup
+│   ├── migrations/        # Database schema changes
+│   ├── seeds/             # Initial data
+│   └── init.sql          # Database initialization
+├── docker/                # Docker orchestration
+│   ├── docker-compose.yml     # Lokal udvikling
+│   ├── docker-compose.prod.yml # Production setup
+│   └── .env.example       # Environment variable template
+├── infrastructure/        # AWS deployment
+│   ├── cloudformation/    # AWS CloudFormation templates
+│   ├── terraform/         # Alternative: Terraform scripts
+│   ├── deploy.sh         # Deployment script
+│   └── aws-setup.md      # Setup guide fra tom AWS konto
+├── scripts/               # Utility scripts
+│   ├── build.sh          # Build alle containers
+│   ├── deploy-local.sh   # Start lokal environment
+│   └── deploy-aws.sh     # Deploy til AWS
+└── README.md             # Komplet setup documentation
 ```
 
 ### Asset Behov:
