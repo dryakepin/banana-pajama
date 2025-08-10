@@ -5,12 +5,15 @@ export default class GameOverScene extends Phaser.Scene {
         super({ key: 'GameOverScene' });
         this.finalScore = 0;
         this.survivalTime = 0;
+        this.zombiesKilled = 0;
         this.backgroundMusic = null;
+        this.minHighScore = null; // Will store the minimum score needed for top 10
     }
 
     init(data) {
         this.finalScore = data.score || 0;
         this.survivalTime = data.time || 0;
+        this.zombiesKilled = data.zombiesKilled || 0;
     }
 
     preload() {
@@ -18,7 +21,7 @@ export default class GameOverScene extends Phaser.Scene {
         this.load.audio('zombie-theme', 'assets/zombie-theme.mp3');
     }
 
-    create() {
+    async create() {
         const { width, height } = this.cameras.main;
 
         // Dark background
@@ -45,66 +48,29 @@ export default class GameOverScene extends Phaser.Scene {
         const seconds = this.survivalTime % 60;
         const timeString = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 
-        this.add.text(width / 2, height / 2, `Final Score: ${this.finalScore}\nSurvival Time: ${timeString}`, {
-            fontSize: '24px',
+        this.add.text(width / 2, height / 2 - 20, `Final Score: ${this.finalScore.toLocaleString()}`, {
+            fontSize: '28px',
             fontFamily: 'Courier New, monospace',
-            color: '#ffffff',
-            align: 'center',
-            lineSpacing: 10
-        }).setOrigin(0.5);
-
-        // Check if this is a high score (placeholder logic)
-        const isHighScore = this.finalScore > 1000; // TODO: Check against actual high scores
-        
-        if (isHighScore) {
-            this.add.text(width / 2, height * 0.65, 'NEW HIGH SCORE!', {
-                fontSize: '32px',
-                fontFamily: 'Courier New, monospace',
-                color: '#ffff00',
-                align: 'center',
-                stroke: '#000000',
-                strokeThickness: 2
-            }).setOrigin(0.5);
-
-            // TODO: Add name input for high score
-        }
-
-        // Buttons
-        const buttonStyle = {
-            fontSize: '24px',
-            fontFamily: 'Courier New, monospace',
-            color: '#ffffff',
-            backgroundColor: '#333333',
-            padding: { x: 20, y: 10 }
-        };
-
-        // Try Again button
-        const tryAgainBtn = this.add.text(width / 2 - 100, height * 0.8, 'TRY AGAIN', buttonStyle)
-            .setOrigin(0.5)
-            .setInteractive({ useHandCursor: true })
-            .on('pointerdown', () => this.restartGame())
-            .on('pointerover', () => tryAgainBtn.setStyle({ backgroundColor: '#555555' }))
-            .on('pointerout', () => tryAgainBtn.setStyle({ backgroundColor: '#333333' }));
-
-        // Main Menu button
-        const mainMenuBtn = this.add.text(width / 2 + 100, height * 0.8, 'MAIN MENU', buttonStyle)
-            .setOrigin(0.5)
-            .setInteractive({ useHandCursor: true })
-            .on('pointerdown', () => this.returnToMenu())
-            .on('pointerover', () => mainMenuBtn.setStyle({ backgroundColor: '#555555' }))
-            .on('pointerout', () => mainMenuBtn.setStyle({ backgroundColor: '#333333' }));
-
-        // Keyboard shortcuts
-        this.input.keyboard.on('keydown-SPACE', () => this.restartGame());
-        this.input.keyboard.on('keydown-ESC', () => this.returnToMenu());
-
-        // Instructions
-        this.add.text(width / 2, height * 0.95, 'SPACE to play again • ESC for main menu', {
-            fontSize: '16px',
-            fontFamily: 'Courier New, monospace',
-            color: '#888888',
+            color: '#00ff00',
             align: 'center'
         }).setOrigin(0.5);
+
+        this.add.text(width / 2, height / 2 + 20, `Survival Time: ${timeString}`, {
+            fontSize: '24px',
+            fontFamily: 'Courier New, monospace',
+            color: '#ffaa00',
+            align: 'center'
+        }).setOrigin(0.5);
+
+        this.add.text(width / 2, height / 2 + 50, `Zombies Killed: ${this.zombiesKilled}`, {
+            fontSize: '24px',
+            fontFamily: 'Courier New, monospace',
+            color: '#ff6666',
+            align: 'center'
+        }).setOrigin(0.5);
+
+        // Check for high score
+        await this.checkHighScore();
 
         // Start background music (same as menu)
         this.startBackgroundMusic();
@@ -130,6 +96,82 @@ export default class GameOverScene extends Phaser.Scene {
             this.backgroundMusic.stop();
         }
         this.scene.start('GameScene');
+    }
+
+    async checkHighScore() {
+        try {
+            // Fetch current high scores to check if player qualifies
+            const response = await fetch('/api/highscores?limit=10');
+            if (!response.ok) {
+                throw new Error(`Failed to fetch high scores: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            const highScores = data.data || [];
+            
+            // Check if player's score qualifies for top 10
+            const isHighScore = highScores.length < 10 || this.finalScore > (highScores[highScores.length - 1]?.score || 0);
+            
+            if (isHighScore) {
+                // Player achieved a high score - transition to name entry
+                this.add.text(this.cameras.main.width / 2, this.cameras.main.height / 2 + 100, 
+                    '🎉 NEW HIGH SCORE! 🎉', {
+                    fontSize: '32px',
+                    fontFamily: 'Courier New, monospace',
+                    color: '#ffff00',
+                    align: 'center',
+                    stroke: '#000000',
+                    strokeThickness: 2
+                }).setOrigin(0.5);
+                
+                // Wait a moment then transition to name entry
+                this.time.delayedCall(2000, () => {
+                    if (this.backgroundMusic) {
+                        this.backgroundMusic.stop();
+                    }
+                    this.scene.start('NameEntryScene', {
+                        score: this.finalScore,
+                        time: this.survivalTime,
+                        zombiesKilled: this.zombiesKilled
+                    });
+                });
+            } else {
+                // Regular game over - show standard buttons
+                this.showGameOverButtons();
+            }
+        } catch (error) {
+            console.error('Error checking high score:', error);
+            // Fallback to normal game over if API fails
+            this.showGameOverButtons();
+        }
+    }
+    
+    showGameOverButtons() {
+        const { width, height } = this.cameras.main;
+        
+        const buttonStyle = {
+            fontSize: '24px',
+            fontFamily: 'Courier New, monospace',
+            color: '#ffffff',
+            backgroundColor: '#333333',
+            padding: { x: 20, y: 10 }
+        };
+        
+        // Try Again button
+        const tryAgainBtn = this.add.text(width / 2, height * 0.75, 'TRY AGAIN', buttonStyle)
+            .setOrigin(0.5)
+            .setInteractive({ useHandCursor: true })
+            .on('pointerdown', () => this.restartGame())
+            .on('pointerover', () => tryAgainBtn.setStyle({ backgroundColor: '#555555' }))
+            .on('pointerout', () => tryAgainBtn.setStyle({ backgroundColor: '#333333' }));
+
+        // Main Menu button
+        const mainMenuBtn = this.add.text(width / 2, height * 0.85, 'MAIN MENU', buttonStyle)
+            .setOrigin(0.5)
+            .setInteractive({ useHandCursor: true })
+            .on('pointerdown', () => this.returnToMenu())
+            .on('pointerover', () => mainMenuBtn.setStyle({ backgroundColor: '#555555' }))
+            .on('pointerout', () => mainMenuBtn.setStyle({ backgroundColor: '#333333' }));
     }
 
     returnToMenu() {

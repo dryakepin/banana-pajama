@@ -44,16 +44,16 @@ CREATE INDEX IF NOT EXISTS idx_game_sessions_created_at ON game_sessions(created
 
 -- Insert some sample high scores for testing
 INSERT INTO high_scores (player_name, score, survival_time, zombies_killed) VALUES
-    ('ZombieSlayer', 15420, 892, 154),
-    ('BananaPro', 12350, 745, 123),
-    ('PajamaWarrior', 9870, 623, 98),
-    ('SurvivalKing', 8450, 567, 84),
-    ('DeadShot', 7230, 432, 72),
-    ('NightHunter', 6100, 378, 61),
-    ('CityDefender', 5240, 315, 52),
-    ('ZombieHunter', 4380, 267, 43),
-    ('LastStand', 3520, 198, 35),
-    ('FinalHope', 2890, 145, 28)
+    ('ZombieSlayer', 200, 120, 20),
+    ('BananaPro', 175, 98, 18),
+    ('PajamaWarrior', 150, 85, 15),
+    ('SurvivalKing', 125, 72, 13),
+    ('DeadShot', 100, 65, 10),
+    ('NightHunter', 85, 58, 9),
+    ('CityDefender', 70, 45, 7),
+    ('ZombieHunter', 55, 38, 6),
+    ('LastStand', 40, 30, 4),
+    ('FinalHope', 25, 22, 3)
 ON CONFLICT DO NOTHING;
 
 -- Create a view for leaderboard with additional stats

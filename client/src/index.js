@@ -4,6 +4,8 @@ import Phaser from 'phaser';
 import MenuScene from './scenes/MenuScene.js';
 import GameScene from './scenes/GameScene.js';
 import GameOverScene from './scenes/GameOverScene.js';
+import HighScoreScene from './scenes/HighScoreScene.js';
+import NameEntryScene from './scenes/NameEntryScene.js';
 
 // Detect mobile device for configuration
 const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
@@ -23,7 +25,7 @@ const config = {
             debug: false
         }
     },
-    scene: [MenuScene, GameScene, GameOverScene],
+    scene: [MenuScene, GameScene, GameOverScene, HighScoreScene, NameEntryScene],
     scale: {
         mode: isMobile ? Phaser.Scale.RESIZE : Phaser.Scale.FIT,
         autoCenter: Phaser.Scale.CENTER_BOTH,

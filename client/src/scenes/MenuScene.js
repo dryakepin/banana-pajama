@@ -79,7 +79,10 @@ export default class MenuScene extends Phaser.Scene {
     }
 
     showHighScores() {
-        // TODO: Implement high scores display
-        console.log('High scores coming soon!');
+        // Stop menu music before switching scenes
+        if (this.backgroundMusic) {
+            this.backgroundMusic.stop();
+        }
+        this.scene.start('HighScoreScene');
     }
 }
