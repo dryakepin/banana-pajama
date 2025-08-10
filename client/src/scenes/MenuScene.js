@@ -4,6 +4,8 @@ export default class MenuScene extends Phaser.Scene {
     constructor() {
         super({ key: 'MenuScene' });
         this.backgroundMusic = null;
+        this.scrollingText = null;
+        this.scrollTween = null;
     }
 
     preload() {
@@ -44,16 +46,44 @@ export default class MenuScene extends Phaser.Scene {
             .on('pointerover', () => highScoresBtn.setStyle({ backgroundColor: '#555555' }))
             .on('pointerout', () => highScoresBtn.setStyle({ backgroundColor: '#333333' }));
 
-        // Instructions
-        this.add.text(width / 2, height * 0.95, 'WASD to move • Mouse to aim • Survive as long as possible!', {
-            fontSize: '16px',
-            fontFamily: 'Courier New, monospace',
-            color: '#cccccc',
-            align: 'center'
-        }).setOrigin(0.5);
+        // Scrolling text with instructions and credits
+        this.createScrollingText(width, height);
 
         // Start background music
         this.startBackgroundMusic();
+    }
+
+    createScrollingText(width, height) {
+        const scrollText = 'WASD to Move • Mouse to aim • Made by Arthur, Valdemar, Kaare, and Claude • Survive as long as possible';
+        
+        // Create a seamless scrolling text by duplicating it with separator
+        const seamlessText = scrollText + ' • ' + scrollText;
+        
+        // Create the scrolling text
+        this.scrollingText = this.add.text(0, height * 0.95, seamlessText, {
+            fontSize: '16px',
+            fontFamily: 'Courier New, monospace',
+            color: '#cccccc'
+        });
+
+        // Get the width of a single instance of the text (including separator)
+        const singleTextWidth = this.scrollingText.width / 2;
+        
+        // Start positioned so the text begins at the left edge
+        this.scrollingText.x = 0;
+
+        // Create the tween for smooth scrolling
+        this.scrollTween = this.tweens.add({
+            targets: this.scrollingText,
+            x: -singleTextWidth, // Move left by exactly one text width
+            duration: 12000, // 12 seconds for smoother scrolling
+            ease: 'Linear',
+            repeat: -1, // Loop forever
+            onRepeat: () => {
+                // Reset position to start the seamless loop
+                this.scrollingText.x = 0;
+            }
+        });
     }
 
     startBackgroundMusic() {
@@ -70,11 +100,23 @@ export default class MenuScene extends Phaser.Scene {
         this.backgroundMusic.play();
     }
 
+    cleanupTweens() {
+        // Clean up scrolling text tween
+        if (this.scrollTween) {
+            this.scrollTween.destroy();
+            this.scrollTween = null;
+        }
+        if (this.scrollingText) {
+            this.scrollingText = null;
+        }
+    }
+
     startGame() {
         // Stop menu music before switching scenes
         if (this.backgroundMusic) {
             this.backgroundMusic.stop();
         }
+        this.cleanupTweens();
         this.scene.start('GameScene');
     }
 
@@ -83,6 +125,7 @@ export default class MenuScene extends Phaser.Scene {
         if (this.backgroundMusic) {
             this.backgroundMusic.stop();
         }
+        this.cleanupTweens();
         this.scene.start('HighScoreScene');
     }
 }
