@@ -13,6 +13,7 @@ export default class GameScene extends Phaser.Scene {
         this.cursors = null;
         this.score = 0;
         this.gameTime = 0;
+        this.zombiesKilled = 0;
         this.hp = 100;
         this.crosshair = null;
         this.bullets = null;
@@ -832,6 +833,10 @@ export default class GameScene extends Phaser.Scene {
         this.score += points;
     }
 
+    addZombieKill() {
+        this.zombiesKilled++;
+    }
+
     startBackgroundMusic() {
         // Stop any existing music
         if (this.backgroundMusic) {
@@ -874,7 +879,8 @@ export default class GameScene extends Phaser.Scene {
         
         this.scene.start('GameOverScene', { 
             score: this.score, 
-            time: this.gameTime 
+            time: this.gameTime,
+            zombiesKilled: this.zombiesKilled
         });
     }
     

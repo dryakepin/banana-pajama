@@ -243,6 +243,9 @@ export default class BasicZombie extends Phaser.Physics.Arcade.Sprite {
         // Add score to player
         this.scene.addScore(this.scoreValue);
         
+        // Track zombie kill
+        this.scene.addZombieKill();
+        
         // Basic zombie power-up drops based on updated spec
         const dropChance = Math.random();
         if (dropChance < 0.15) {

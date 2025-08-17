@@ -275,6 +275,9 @@ export default class TankZombie extends Phaser.Physics.Arcade.Sprite {
         // Add score to player (higher score for tank)
         this.scene.addScore(this.scoreValue);
         
+        // Track zombie kill
+        this.scene.addZombieKill();
+        
         // Tank zombies have better power-up drops based on updated spec
         const dropChance = Math.random();
         if (dropChance < 0.05) {

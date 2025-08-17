@@ -28,9 +28,14 @@ export default class NameEntryScene extends Phaser.Scene {
         // Dark background
         this.add.rectangle(width / 2, height / 2, width, height, 0x1a1a2e);
 
+        // Responsive positioning based on screen height
+        const isMobile = height < 600;
+        const titleY = isMobile ? height * 0.08 : 100;
+        const emojiY = isMobile ? height * 0.15 : 150;
+
         // New High Score title
-        this.add.text(width / 2, 100, 'NEW HIGH SCORE!', {
-            fontSize: '48px',
+        this.add.text(width / 2, titleY, 'NEW HIGH SCORE!', {
+            fontSize: isMobile ? '28px' : '48px',
             fontFamily: 'Courier New, monospace',
             color: '#ffff00',
             align: 'center',
@@ -39,33 +44,42 @@ export default class NameEntryScene extends Phaser.Scene {
         }).setOrigin(0.5);
 
         // Celebration emojis
-        this.add.text(width / 2, 150, '🎉 🏆 🎉', {
-            fontSize: '32px',
+        this.add.text(width / 2, emojiY, '🎉 🏆 🎉', {
+            fontSize: isMobile ? '24px' : '32px',
             align: 'center'
         }).setOrigin(0.5);
 
-        // Score information
+        // Score information with responsive positioning
+        const scoreY = isMobile ? height * 0.25 : 220;
+        const timeY = isMobile ? height * 0.32 : 260;
+        const killsY = isMobile ? height * 0.39 : 300;
+        const promptY = isMobile ? height * 0.48 : 380;
+        const inputY = isMobile ? height * 0.56 : 430;
+        const countY = isMobile ? height * 0.63 : 480;
+        const instructY = isMobile ? height * 0.72 : 550;
+        const buttonY = isMobile ? height * 0.85 : 620;
+
         const minutes = Math.floor(this.scoreData.time / 60);
         const seconds = this.scoreData.time % 60;
         const timeString = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 
-        this.add.text(width / 2, 220, `Score: ${this.scoreData.score.toLocaleString()}`, {
-            fontSize: '28px',
+        this.add.text(width / 2, scoreY, `Score: ${this.scoreData.score.toLocaleString()}`, {
+            fontSize: isMobile ? '20px' : '28px',
             fontFamily: 'Courier New, monospace',
             color: '#00ff00',
             align: 'center'
         }).setOrigin(0.5);
 
-        this.add.text(width / 2, 260, `Survival Time: ${timeString}`, {
-            fontSize: '24px',
+        this.add.text(width / 2, timeY, `Survival Time: ${timeString}`, {
+            fontSize: isMobile ? '16px' : '24px',
             fontFamily: 'Courier New, monospace',
             color: '#ffaa00',
             align: 'center'
         }).setOrigin(0.5);
 
         if (this.scoreData.zombiesKilled) {
-            this.add.text(width / 2, 300, `Zombies Killed: ${this.scoreData.zombiesKilled}`, {
-                fontSize: '24px',
+            this.add.text(width / 2, killsY, `Zombies Killed: ${this.scoreData.zombiesKilled}`, {
+                fontSize: isMobile ? '16px' : '24px',
                 fontFamily: 'Courier New, monospace',
                 color: '#ff6666',
                 align: 'center'
@@ -73,35 +87,35 @@ export default class NameEntryScene extends Phaser.Scene {
         }
 
         // Name entry prompt
-        this.add.text(width / 2, 380, 'Enter your name:', {
-            fontSize: '24px',
+        this.add.text(width / 2, promptY, 'Enter your name:', {
+            fontSize: isMobile ? '18px' : '24px',
             fontFamily: 'Courier New, monospace',
             color: '#ffffff',
             align: 'center'
         }).setOrigin(0.5);
 
         // Name input display
-        this.nameText = this.add.text(width / 2, 430, '', {
-            fontSize: '32px',
+        this.nameText = this.add.text(width / 2, inputY, '', {
+            fontSize: isMobile ? '24px' : '32px',
             fontFamily: 'Courier New, monospace',
             color: '#ffffff',
             backgroundColor: '#333333',
-            padding: { x: 20, y: 10 },
-            fixedWidth: 400,
+            padding: { x: 15, y: 8 },
+            fixedWidth: isMobile ? width * 0.8 : 400,
             align: 'center'
         }).setOrigin(0.5);
 
         // Character count display
-        this.characterCountText = this.add.text(width / 2, 480, `0/${this.maxNameLength}`, {
-            fontSize: '16px',
+        this.characterCountText = this.add.text(width / 2, countY, `0/${this.maxNameLength}`, {
+            fontSize: isMobile ? '12px' : '16px',
             fontFamily: 'Courier New, monospace',
             color: '#888888',
             align: 'center'
         }).setOrigin(0.5);
 
         // Instructions
-        this.add.text(width / 2, 550, 'Type your name and press ENTER to save\nESC to skip', {
-            fontSize: '18px',
+        this.add.text(width / 2, instructY, 'Type your name and press ENTER to save\nESC to skip', {
+            fontSize: isMobile ? '14px' : '18px',
             fontFamily: 'Courier New, monospace',
             color: '#cccccc',
             align: 'center',
@@ -109,12 +123,13 @@ export default class NameEntryScene extends Phaser.Scene {
         }).setOrigin(0.5);
 
         // Submit and skip buttons
-        const submitBtn = this.add.text(width / 2 - 100, 620, 'SUBMIT', {
-            fontSize: '24px',
+        const buttonSpacing = isMobile ? 80 : 100;
+        const submitBtn = this.add.text(width / 2 - buttonSpacing, buttonY, 'SUBMIT', {
+            fontSize: isMobile ? '18px' : '24px',
             fontFamily: 'Courier New, monospace',
             color: '#ffffff',
             backgroundColor: '#006600',
-            padding: { x: 20, y: 10 }
+            padding: { x: 15, y: 8 }
         })
         .setOrigin(0.5)
         .setInteractive({ useHandCursor: true })
@@ -122,12 +137,12 @@ export default class NameEntryScene extends Phaser.Scene {
         .on('pointerover', () => submitBtn.setStyle({ backgroundColor: '#008800' }))
         .on('pointerout', () => submitBtn.setStyle({ backgroundColor: '#006600' }));
 
-        const skipBtn = this.add.text(width / 2 + 100, 620, 'SKIP', {
-            fontSize: '24px',
+        const skipBtn = this.add.text(width / 2 + buttonSpacing, buttonY, 'SKIP', {
+            fontSize: isMobile ? '18px' : '24px',
             fontFamily: 'Courier New, monospace',
             color: '#ffffff',
             backgroundColor: '#660000',
-            padding: { x: 20, y: 10 }
+            padding: { x: 15, y: 8 }
         })
         .setOrigin(0.5)
         .setInteractive({ useHandCursor: true })
@@ -208,7 +223,10 @@ export default class NameEntryScene extends Phaser.Scene {
         this.input.keyboard.removeAllListeners();
         
         // Show saving message
-        const savingText = this.add.text(this.cameras.main.width / 2, 700, 'Saving score...', {
+        const { width, height } = this.cameras.main;
+        const isMobile = height < 600;
+        const messageY = isMobile ? height * 0.95 : 700;
+        const savingText = this.add.text(width / 2, messageY, 'Saving score...', {
             fontSize: '20px',
             fontFamily: 'Courier New, monospace',
             color: '#ffff00',
@@ -263,8 +281,11 @@ export default class NameEntryScene extends Phaser.Scene {
     }
 
     showErrorMessage(message) {
-        const errorText = this.add.text(this.cameras.main.width / 2, 520, message, {
-            fontSize: '18px',
+        const { width, height } = this.cameras.main;
+        const isMobile = height < 600;
+        const errorY = isMobile ? height * 0.68 : 520;
+        const errorText = this.add.text(width / 2, errorY, message, {
+            fontSize: isMobile ? '14px' : '18px',
             fontFamily: 'Courier New, monospace',
             color: '#ff4444',
             align: 'center'
