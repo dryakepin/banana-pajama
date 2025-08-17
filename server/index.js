@@ -85,6 +85,81 @@ app.get('/api/health', async (req, res) => {
     }
 });
 
+// Database initialization route (development/setup only)
+app.post('/api/init-db', async (req, res) => {
+    try {
+        // Create high_scores table
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS high_scores (
+                id SERIAL PRIMARY KEY,
+                player_name VARCHAR(50) NOT NULL,
+                score INTEGER NOT NULL CHECK (score >= 0),
+                survival_time INTEGER NOT NULL CHECK (survival_time >= 0),
+                zombies_killed INTEGER DEFAULT 0 CHECK (zombies_killed >= 0),
+                created_at TIMESTAMP DEFAULT NOW()
+            );
+        `);
+
+        // Create game_sessions table
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS game_sessions (
+                id SERIAL PRIMARY KEY,
+                session_id UUID DEFAULT gen_random_uuid(),
+                player_name VARCHAR(50),
+                start_time TIMESTAMP DEFAULT NOW(),
+                end_time TIMESTAMP,
+                final_score INTEGER,
+                survival_time INTEGER,
+                zombies_killed INTEGER DEFAULT 0,
+                power_ups_collected INTEGER DEFAULT 0,
+                shots_fired INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT NOW()
+            );
+        `);
+
+        // Create indexes
+        await pool.query(`
+            CREATE INDEX IF NOT EXISTS idx_high_scores_score ON high_scores(score DESC);
+            CREATE INDEX IF NOT EXISTS idx_high_scores_created_at ON high_scores(created_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_game_sessions_session_id ON game_sessions(session_id);
+            CREATE INDEX IF NOT EXISTS idx_game_sessions_created_at ON game_sessions(created_at DESC);
+        `);
+
+        // Insert sample data if table is empty
+        const count = await pool.query('SELECT COUNT(*) FROM high_scores');
+        if (parseInt(count.rows[0].count) === 0) {
+            await pool.query(`
+                INSERT INTO high_scores (player_name, score, survival_time, zombies_killed) VALUES
+                    ('ZombieSlayer', 200, 120, 20),
+                    ('BananaPro', 175, 98, 18),
+                    ('PajamaWarrior', 150, 85, 15),
+                    ('SurvivalKing', 125, 72, 13),
+                    ('DeadShot', 100, 65, 10),
+                    ('NightHunter', 85, 58, 9),
+                    ('CityDefender', 70, 45, 7),
+                    ('ZombieHunter', 55, 38, 6),
+                    ('LastStand', 40, 30, 4),
+                    ('FinalHope', 25, 22, 3);
+            `);
+        }
+
+        res.json({
+            success: true,
+            message: 'Database initialized successfully',
+            tables_created: ['high_scores', 'game_sessions'],
+            sample_data_inserted: parseInt(count.rows[0].count) === 0
+        });
+
+    } catch (error) {
+        console.error('Error initializing database:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to initialize database',
+            details: error.message
+        });
+    }
+});
+
 // High Score API Routes
 app.get('/api/highscores', async (req, res) => {
     try {
