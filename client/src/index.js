@@ -29,6 +29,8 @@ const config = {
     scale: {
         mode: isMobile ? Phaser.Scale.RESIZE : Phaser.Scale.FIT,
         autoCenter: Phaser.Scale.CENTER_BOTH,
+        expandParent: true,
+        fullscreenTarget: document.body,
         min: {
             width: 480,  // Minimum landscape width
             height: 320  // Minimum landscape height
@@ -38,11 +40,25 @@ const config = {
             height: 1080
         }
     },
+    input: {
+        activePointers: 3, // Support multi-touch for mobile
+        touch: {
+            target: null,
+            capture: true
+        },
+        smoothFactor: 0.2
+    },
     audio: {
         disableWebAudio: false
     },
     dom: {
         createContainer: true
+    },
+    render: {
+        powerPreference: 'high-performance',
+        antialias: false, // Disable for mobile performance
+        transparent: false,
+        clearBeforeRender: true
     }
 };
 
@@ -54,11 +70,82 @@ const hideLoadingScreen = () => {
     }
 };
 
+// Unlock audio context on first user interaction
+const unlockAudioContext = () => {
+    if (game && game.sound && game.sound.context && game.sound.context.state === 'suspended') {
+        console.log('🔊 Audio context suspended, resuming after user interaction...');
+        game.sound.context.resume().then(() => {
+            console.log('🔊 Audio context unlocked successfully');
+        }).catch(error => {
+            console.error('🔊 Failed to resume audio context:', error);
+        });
+    } else {
+        console.log('🔊 Audio context already unlocked or unavailable');
+    }
+};
+
 // Initialize the game
 const game = new Phaser.Game(config);
 
-// Hide loading screen once the first scene is ready
-game.events.once('ready', hideLoadingScreen);
+// Setup Phaser Scale Manager events for fullscreen
+game.events.once('ready', () => {
+    hideLoadingScreen();
+    setupPhaserFullscreenEvents();
+});
+
+// Phaser Scale Manager event setup
+const setupPhaserFullscreenEvents = () => {
+    if (game && game.scale) {
+        console.log('🎮 Setting up Phaser fullscreen events');
+        
+        // Listen for fullscreen events
+        game.scale.on('enterfullscreen', () => {
+            console.log('✅ Entered fullscreen via Phaser Scale Manager');
+            document.body.classList.add('phaser-fullscreen');
+            
+            // Force landscape orientation if supported
+            if (screen.orientation && screen.orientation.lock) {
+                screen.orientation.lock('landscape-primary').catch(err => {
+                    console.log('Orientation lock failed after fullscreen:', err);
+                });
+            }
+            
+            // Update viewport height
+            setViewportHeight();
+        });
+        
+        game.scale.on('leavefullscreen', () => {
+            console.log('❌ Left fullscreen via Phaser Scale Manager');
+            document.body.classList.remove('phaser-fullscreen');
+            setViewportHeight();
+        });
+        
+        game.scale.on('fullscreenunsupported', () => {
+            console.log('⚠️ Phaser fullscreen unsupported - using CSS fallbacks');
+            // Automatically apply CSS-based fullscreen for unsupported devices
+            tryAndroidCSSTricks();
+        });
+        
+        // Handle resize events from Phaser
+        game.scale.on('resize', (gameSize, baseSize, displaySize, resolution) => {
+            console.log('📱 Phaser resize event:', {
+                gameSize: `${gameSize.width}x${gameSize.height}`,
+                displaySize: `${displaySize.width}x${displaySize.height}`,
+                windowSize: `${window.innerWidth}x${window.innerHeight}`
+            });
+            
+            // Update CSS viewport height on resize
+            setViewportHeight();
+        });
+        
+        // Log fullscreen capabilities
+        console.log('🔍 Phaser fullscreen capabilities:', {
+            available: game.scale.fullscreen.available,
+            active: game.scale.isFullscreen,
+            element: game.scale.fullscreen.element
+        });
+    }
+};
 
 // Mobile viewport height fix
 const setViewportHeight = () => {
@@ -73,18 +160,60 @@ const isChrome = /Chrome/i.test(navigator.userAgent);
 const isSamsung = /SamsungBrowser/i.test(navigator.userAgent);
 const isFirefox = /Firefox/i.test(navigator.userAgent);
 
-// Debug function for fullscreen status
+// Comprehensive fullscreen detection
+const isInFullscreen = () => {
+    // Check multiple fullscreen APIs
+    const domFullscreen = !!(document.fullscreenElement || 
+                           document.webkitFullscreenElement || 
+                           document.mozFullScreenElement || 
+                           document.msFullscreenElement);
+    
+    // Check Phaser fullscreen state
+    const phaserFullscreen = game && game.scale && game.scale.isFullscreen;
+    
+    // Check if we're in a PWA standalone mode
+    const standalone = window.navigator.standalone || 
+                      window.matchMedia('(display-mode: standalone)').matches;
+    
+    // Check CSS-based fullscreen states
+    const cssFullscreen = document.body.classList.contains('phaser-fullscreen') ||
+                         document.body.classList.contains('android-fullscreen') ||
+                         document.body.classList.contains('ios-fullscreen');
+    
+    return {
+        dom: domFullscreen,
+        phaser: phaserFullscreen,
+        standalone: standalone,
+        css: cssFullscreen,
+        any: domFullscreen || phaserFullscreen || standalone || cssFullscreen
+    };
+};
+
+// Debug function for comprehensive fullscreen status
 const debugFullscreenStatus = () => {
-    console.log('🔍 Fullscreen Debug Status:', {
-        'document.fullscreenElement': !!document.fullscreenElement,
-        'document.webkitFullscreenElement': !!document.webkitFullscreenElement,
-        'document.mozFullScreenElement': !!document.mozFullScreenElement,
-        'document.msFullscreenElement': !!document.msFullscreenElement,
+    const fullscreenStatus = isInFullscreen();
+    
+    console.log('🔍 Comprehensive Fullscreen Status:', {
+        ...fullscreenStatus,
         'window.innerHeight': window.innerHeight,
+        'window.innerWidth': window.innerWidth,
         'screen.height': screen.height,
+        'screen.width': screen.width,
         'screen.availHeight': screen.availHeight,
+        'screen.availWidth': screen.availWidth,
+        'devicePixelRatio': window.devicePixelRatio,
+        'orientation': screen.orientation?.type || 'unknown',
         'document.body.classList': Array.from(document.body.classList),
-        'canvas.style': document.querySelector('canvas')?.style.cssText || 'No canvas found'
+        'canvas.dimensions': (() => {
+            const canvas = document.querySelector('canvas');
+            return canvas ? {
+                width: canvas.width,
+                height: canvas.height,
+                clientWidth: canvas.clientWidth,
+                clientHeight: canvas.clientHeight,
+                style: canvas.style.cssText
+            } : 'No canvas found';
+        })()
     });
 };
 
@@ -99,28 +228,74 @@ console.log('Browser detection:', {
 
 // Debug fullscreen every few seconds on mobile
 if (isMobile) {
-    setInterval(debugFullscreenStatus, 3000);
+    setInterval(debugFullscreenStatus, 5000);
+    
+    // Also debug when fullscreen state might change
+    document.addEventListener('fullscreenchange', debugFullscreenStatus);
+    document.addEventListener('webkitfullscreenchange', debugFullscreenStatus);
+    document.addEventListener('mozfullscreenchange', debugFullscreenStatus);
+    document.addEventListener('msfullscreenchange', debugFullscreenStatus);
+    
+    // Debug on visibility change (app switching)
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+            console.log('👁️ App became visible - checking fullscreen status');
+            setTimeout(debugFullscreenStatus, 100);
+        }
+    });
 }
 
-// Request fullscreen on mobile with Android-specific handling
+// Phaser-based fullscreen request with native Scale Manager
+const requestPhaserFullscreen = () => {
+    if (game && game.scale) {
+        console.log('🎮 Using Phaser Scale Manager for fullscreen');
+        
+        try {
+            if (game.scale.fullscreen.available) {
+                console.log('✅ Phaser fullscreen available - requesting');
+                game.scale.startFullscreen();
+                return true;
+            } else {
+                console.log('❌ Phaser fullscreen not available - using fallback');
+                return false;
+            }
+        } catch (err) {
+            console.log('❌ Phaser fullscreen error:', err);
+            return false;
+        }
+    }
+    return false;
+};
+
+// Request fullscreen on mobile with Phaser integration
 const requestFullscreen = () => {
     const element = document.documentElement;
     
-    // For Android, try multiple approaches
+    // Try Phaser fullscreen first if available
+    if (requestPhaserFullscreen()) {
+        // Phaser fullscreen succeeded, also handle orientation
+        setTimeout(() => {
+            if (screen.orientation && screen.orientation.lock) {
+                screen.orientation.lock('landscape-primary').catch(err => {
+                    console.log('Orientation lock failed:', err);
+                });
+            }
+        }, 100);
+        return;
+    }
+    
+    // Fallback to DOM API for Android
     if (isAndroid) {
-        console.log('Android detected - trying multiple fullscreen methods');
+        console.log('Android detected - trying DOM fullscreen methods');
         
         // Method 1: Standard Fullscreen API
         if (element.requestFullscreen) {
             try {
-                // Try without navigationUI first for better compatibility
                 const fullscreenPromise = element.requestFullscreen();
                 
-                // Check if requestFullscreen returns a Promise
                 if (fullscreenPromise && typeof fullscreenPromise.then === 'function') {
                     fullscreenPromise.then(() => {
                         console.log('✅ Android fullscreen success with requestFullscreen');
-                        // Force screen orientation after fullscreen
                         if (screen.orientation && screen.orientation.lock) {
                             screen.orientation.lock('landscape-primary').catch(err => {
                                 console.log('Orientation lock failed:', err);
@@ -131,7 +306,6 @@ const requestFullscreen = () => {
                         tryAndroidAlternatives();
                     });
                 } else {
-                    // requestFullscreen doesn't return a Promise, assume it worked
                     console.log('✅ Android fullscreen called (no Promise returned)');
                     setTimeout(() => {
                         if (screen.orientation && screen.orientation.lock) {
@@ -149,7 +323,7 @@ const requestFullscreen = () => {
             tryAndroidAlternatives();
         }
     } else {
-        // iOS and other browsers
+        // iOS and other browsers - use DOM API fallback
         if (element.requestFullscreen) {
             element.requestFullscreen();
         } else if (element.webkitRequestFullscreen) {
@@ -158,6 +332,9 @@ const requestFullscreen = () => {
             element.mozRequestFullScreen();
         } else if (element.msRequestFullscreen) {
             element.msRequestFullscreen();
+        } else {
+            console.log('❌ No fullscreen API available - using CSS fallback');
+            tryAndroidCSSTricks();
         }
     }
 };
@@ -200,12 +377,17 @@ const tryAndroidAlternatives = () => {
     }
 };
 
-// Android CSS-based fullscreen simulation
+// CSS-based fullscreen simulation for Android and iOS
 const tryAndroidCSSTricks = () => {
-    console.log('🔧 Android: Falling back to CSS fullscreen simulation');
+    const platform = isiOS ? 'iOS' : (isAndroid ? 'Android' : 'Other');
+    console.log(`🔧 ${platform}: Falling back to CSS fullscreen simulation`);
     
-    // Add Android-specific CSS class for fullscreen simulation
-    document.body.classList.add('android-fullscreen');
+    // Add platform-specific CSS class for fullscreen simulation
+    if (isiOS) {
+        document.body.classList.add('ios-fullscreen');
+    } else {
+        document.body.classList.add('android-fullscreen');
+    }
     
     // Chrome Mobile specific tricks
     if (isChrome && isAndroid) {
@@ -240,7 +422,7 @@ const tryAndroidCSSTricks = () => {
         setTimeout(hideAddressBar, 1000);
         setTimeout(hideAddressBar, 2000);
         
-        // Force game canvas to full screen dimensions
+        // Force game canvas to full screen dimensions with Phaser integration
         setTimeout(() => {
             const canvas = document.querySelector('canvas');
             if (canvas) {
@@ -254,19 +436,37 @@ const tryAndroidCSSTricks = () => {
                 canvas.style.margin = '0';
                 canvas.style.padding = '0';
                 canvas.style.border = 'none';
+                
                 console.log('🔧 Chrome: Force applied canvas fullscreen styles with dvh');
+                
+                // Also update Phaser's scale if available
+                if (game && game.scale) {
+                    const newWidth = window.innerWidth;
+                    const newHeight = window.innerHeight;
+                    game.scale.setGameSize(newWidth, newHeight);
+                    console.log(`🎮 Updated Phaser game size to ${newWidth}x${newHeight}`);
+                }
             }
         }, 500);
         
-        // Additional Chrome address bar hiding on orientation change
+        // Additional Chrome address bar hiding on orientation change with Phaser integration
         window.addEventListener('orientationchange', () => {
             setTimeout(() => {
                 hideAddressBar();
+                
                 // Force re-apply canvas styles after orientation change
                 const canvas = document.querySelector('canvas');
                 if (canvas) {
                     canvas.style.height = '100dvh';
                     canvas.style.width = '100vw';
+                }
+                
+                // Update Phaser scale after orientation change
+                if (game && game.scale) {
+                    const newWidth = window.innerWidth;
+                    const newHeight = window.innerHeight;
+                    game.scale.setGameSize(newWidth, newHeight);
+                    console.log(`🎮 Orientation change: Updated Phaser to ${newWidth}x${newHeight}`);
                 }
             }, 200);
         });
@@ -294,45 +494,67 @@ if (isMobile) {
     // Set initial viewport height
     setViewportHeight();
     
-    // Request fullscreen on first user interaction
+    // Request fullscreen and unlock audio on first user interaction
     let fullscreenRequested = false;
     const requestFullscreenOnce = () => {
         if (!fullscreenRequested) {
             fullscreenRequested = true;
             
+            // Unlock audio context on first user interaction
+            unlockAudioContext();
+            
             if (isAndroid) {
-                console.log('Android: Requesting fullscreen with multiple fallbacks');
+                console.log('Android: Requesting fullscreen with Phaser + fallbacks');
                 
                 // Chrome Mobile needs special handling
                 if (isChrome) {
-                    console.log('Chrome Mobile: Using Chrome-specific fullscreen approach');
+                    console.log('Chrome Mobile: Using enhanced fullscreen approach');
                     
-                    // For Chrome, try fullscreen API but don't wait long
+                    // Try Phaser fullscreen first, then DOM API
                     requestFullscreen();
                     
-                    // Apply CSS tricks quickly for Chrome since API often fails
+                    // Check status and apply CSS fallback if needed
                     setTimeout(() => {
-                        console.log('Chrome Mobile: Checking fullscreen status...');
-                        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-                            console.log('Chrome Mobile: API failed, applying CSS fullscreen');
+                        const phaserFullscreen = game && game.scale && game.scale.isFullscreen;
+                        const domFullscreen = document.fullscreenElement || document.webkitFullscreenElement;
+                        
+                        console.log('Chrome Mobile: Checking fullscreen status...', {
+                            phaser: phaserFullscreen,
+                            dom: !!domFullscreen
+                        });
+                        
+                        if (!phaserFullscreen && !domFullscreen) {
+                            console.log('Chrome Mobile: APIs failed, applying CSS fullscreen');
                             tryAndroidCSSTricks();
                         } else {
                             console.log('Chrome Mobile: Fullscreen API succeeded');
                         }
-                    }, 500); // Shorter timeout for Chrome
+                    }, 500);
                     
                 } else {
                     // Other Android browsers
                     requestFullscreen();
                     setTimeout(() => {
-                        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-                            console.log('Android: Fullscreen API failed, using CSS fallback');
+                        const phaserFullscreen = game && game.scale && game.scale.isFullscreen;
+                        const domFullscreen = document.fullscreenElement || document.webkitFullscreenElement;
+                        
+                        if (!phaserFullscreen && !domFullscreen) {
+                            console.log('Android: Fullscreen APIs failed, using CSS fallback');
                             tryAndroidCSSTricks();
                         }
                     }, 1000);
                 }
             } else {
+                // iOS and other platforms
                 requestFullscreen();
+                
+                // For iOS, always apply additional optimizations since native fullscreen often fails
+                if (isiOS) {
+                    setTimeout(() => {
+                        console.log('iOS: Applying additional viewport optimizations');
+                        tryAndroidCSSTricks(); // Use same CSS tricks for iOS
+                    }, 800);
+                }
             }
             
             hideBrowserUI();

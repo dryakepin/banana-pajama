@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, orientation=landscape, minimal-ui">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, orientation=landscape, minimal-ui, viewport-fit=cover, user-scalable=no">
     <meta name="screen-orientation" content="landscape">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -10,6 +10,13 @@
     <meta name="apple-touch-fullscreen" content="yes">
     <meta name="format-detection" content="telephone=no">
     <meta name="msapplication-tap-highlight" content="no">
+    <!-- Enhanced mobile fullscreen support -->
+    <meta name="theme-color" content="#1a1a2e">
+    <meta name="msapplication-navbutton-color" content="#1a1a2e">
+    <meta name="apple-mobile-web-app-title" content="Banana Pajama">
+    <!-- Disable various mobile browser features -->
+    <meta name="HandheldFriendly" content="true">
+    <meta name="MobileOptimized" content="width">
     <link rel="manifest" href="manifest.json">
     <title>Banana Pajama Zombie Shooter</title>
     <style>
@@ -52,6 +59,16 @@
             -webkit-user-select: none;
             -webkit-touch-callout: none;
             -webkit-tap-highlight-color: transparent;
+            /* Enhanced mobile support */
+            -webkit-transform: translate3d(0, 0, 0);
+            transform: translate3d(0, 0, 0);
+            -webkit-backface-visibility: hidden;
+            backface-visibility: hidden;
+            /* Handle safe areas for notched devices */
+            padding-top: env(safe-area-inset-top);
+            padding-bottom: env(safe-area-inset-bottom);
+            padding-left: env(safe-area-inset-left);
+            padding-right: env(safe-area-inset-right);
         }
         
         #game-container {
@@ -156,6 +173,45 @@
             }
         }
         
+        /* Phaser Scale Manager fullscreen styles */
+        body.phaser-fullscreen {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            height: 100dvh !important;
+            z-index: 99999 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        
+        body.phaser-fullscreen #game-container {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            height: 100dvh !important;
+            z-index: 100000 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        
+        body.phaser-fullscreen canvas {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            height: 100dvh !important;
+            z-index: 100001 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border: none !important;
+            outline: none !important;
+        }
+        
         /* Android fullscreen fallback when API fails */
         body.android-fullscreen {
             position: fixed !important;
@@ -218,11 +274,52 @@
         
         /* Chrome-specific viewport handling */
         @supports (height: 100dvh) {
+            body.phaser-fullscreen,
+            body.phaser-fullscreen #game-container,
+            body.phaser-fullscreen canvas,
             body.android-fullscreen,
             body.android-fullscreen #game-container,
             body.android-fullscreen canvas {
                 height: 100dvh !important;
             }
+        }
+        
+        /* iOS fullscreen optimization */
+        body.ios-fullscreen {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            height: 100dvh !important;
+            z-index: 99999 !important;
+            /* iOS-specific overrides */
+            -webkit-overflow-scrolling: touch !important;
+            -webkit-transform: translate3d(0, 0, 0) !important;
+        }
+        
+        body.ios-fullscreen #game-container {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            height: 100dvh !important;
+            z-index: 100000 !important;
+        }
+        
+        body.ios-fullscreen canvas {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            height: 100dvh !important;
+            z-index: 100001 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border: none !important;
+            outline: none !important;
         }
     </style>
 </head>

@@ -92,12 +92,53 @@ export default class MenuScene extends Phaser.Scene {
             this.backgroundMusic.stop();
         }
         
-        // Start menu theme music
-        this.backgroundMusic = this.sound.add('zombie-theme', {
-            loop: true,
-            volume: 0.5
-        });
-        this.backgroundMusic.play();
+        // Initialize audio - will start after user interaction
+        this.initializeAudio();
+    }
+
+    initializeAudio() {
+        // Check if audio context needs to be unlocked
+        if (this.sound.context && this.sound.context.state === 'suspended') {
+            console.log('🔊 Audio context suspended, will start after user interaction');
+            
+            // Create a one-time event listener for any user interaction
+            const unlockAudio = () => {
+                console.log('🔊 User interaction detected, unlocking audio...');
+                this.sound.context.resume().then(() => {
+                    console.log('🔊 Audio context resumed, starting background music');
+                    this.startMenuMusic();
+                    
+                    // Remove listeners after first interaction
+                    this.input.off('pointerdown', unlockAudio);
+                    this.input.keyboard?.off('keydown', unlockAudio);
+                }).catch(error => {
+                    console.error('🔊 Failed to resume audio context:', error);
+                });
+            };
+            
+            // Listen for any pointer or keyboard interaction
+            this.input.once('pointerdown', unlockAudio);
+            if (this.input.keyboard) {
+                this.input.keyboard.once('keydown', unlockAudio);
+            }
+        } else {
+            // Audio context is already unlocked
+            console.log('🔊 Audio context ready, starting background music immediately');
+            this.startMenuMusic();
+        }
+    }
+    
+    startMenuMusic() {
+        try {
+            this.backgroundMusic = this.sound.add('zombie-theme', {
+                loop: true,
+                volume: 0.5
+            });
+            this.backgroundMusic.play();
+            console.log('🔊 Menu music started successfully');
+        } catch (error) {
+            console.error('🔊 Failed to start menu music:', error);
+        }
     }
 
     cleanupTweens() {

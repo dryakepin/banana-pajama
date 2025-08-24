@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import Bullet from '../sprites/Bullet.js';
 import BasicZombie from '../sprites/BasicZombie.js';
 import TankZombie from '../sprites/TankZombie.js';
+import FastZombie from '../sprites/FastZombie.js';
 import PowerUp from '../sprites/PowerUp.js';
 import TileMap from '../world/TileMap.js';
 import VirtualJoystick from '../ui/VirtualJoystick.js';
@@ -19,11 +20,14 @@ export default class GameScene extends Phaser.Scene {
         this.bullets = null;
         this.zombies = null;
         this.tankZombies = null;
+        this.fastZombies = null;
         this.powerUps = null;
         this.zombieSpawnTimer = null;
         this.tankZombieSpawnTimer = null;
+        this.fastZombieSpawnTimer = null;
         this.zombieSpawnRate = 2000; // Start spawning every 2 seconds
         this.tankZombieSpawnRate = 8000; // Tank zombies spawn every 8 seconds
+        this.fastZombieSpawnRate = 3000; // Fast zombies spawn every 3 seconds for testing
         this.backgroundMusic = null;
         this.tileMap = null;
         this.virtualJoystick = null;
@@ -56,6 +60,7 @@ export default class GameScene extends Phaser.Scene {
         this.load.image('crosshair', 'assets/crosshairs.png');
         this.load.image('zombie1', 'assets/zombie-1.png');
         this.load.image('zombie2', 'assets/zombie-2.png');
+        this.load.image('zombie3', 'assets/zombie-3.png');
         this.load.audio('zombie-game', 'assets/zombie-game.mp3');
         
         // Load power-up assets with fallback handling
@@ -177,6 +182,13 @@ export default class GameScene extends Phaser.Scene {
             runChildUpdate: true
         });
 
+        // Create fast zombies group
+        this.fastZombies = this.physics.add.group({
+            classType: FastZombie,
+            maxSize: 20, // Medium number of fast zombies
+            runChildUpdate: true
+        });
+
         // Create power-ups group
         this.powerUps = this.physics.add.group({
             classType: PowerUp,
@@ -187,6 +199,7 @@ export default class GameScene extends Phaser.Scene {
         // Set up collision detection
         this.physics.add.overlap(this.bullets, this.zombies, this.bulletHitZombie, null, this);
         this.physics.add.overlap(this.bullets, this.tankZombies, this.bulletHitTankZombie, null, this);
+        this.physics.add.overlap(this.bullets, this.fastZombies, this.bulletHitFastZombie, null, this);
         this.physics.add.overlap(this.player, this.powerUps, this.playerPickupPowerUp, null, this);
 
         // Hide default cursor and use custom crosshair
@@ -221,6 +234,14 @@ export default class GameScene extends Phaser.Scene {
         this.tankZombieSpawnTimer = this.time.addEvent({
             delay: this.tankZombieSpawnRate,
             callback: this.spawnTankZombie,
+            callbackScope: this,
+            loop: true
+        });
+
+        // Start fast zombie spawning
+        this.fastZombieSpawnTimer = this.time.addEvent({
+            delay: this.fastZombieSpawnRate,
+            callback: this.spawnFastZombie,
             callbackScope: this,
             loop: true
         });
@@ -685,6 +706,7 @@ export default class GameScene extends Phaser.Scene {
     }
 
     spawnZombie() {
+        console.log('Spawning basic zombie...');
         const { width, height } = this.cameras.main;
         const camera = this.cameras.main;
         
@@ -735,6 +757,7 @@ export default class GameScene extends Phaser.Scene {
     }
 
     spawnTankZombie() {
+        console.log('Spawning tank zombie...');
         const { width, height } = this.cameras.main;
         const camera = this.cameras.main;
         
@@ -784,6 +807,67 @@ export default class GameScene extends Phaser.Scene {
         }
     }
 
+    spawnFastZombie() {
+        console.log('Spawning FAST zombie...');
+        const { width, height } = this.cameras.main;
+        const camera = this.cameras.main;
+        
+        // Get camera bounds in world coordinates
+        const cameraLeft = camera.scrollX;
+        const cameraRight = camera.scrollX + width;
+        const cameraTop = camera.scrollY;
+        const cameraBottom = camera.scrollY + height;
+        
+        // Choose random edge to spawn from (relative to camera view)
+        const edge = Phaser.Math.Between(0, 3); // 0=top, 1=right, 2=bottom, 3=left
+        let x, y;
+        
+        switch (edge) {
+            case 0: // Top
+                x = Phaser.Math.Between(cameraLeft, cameraRight);
+                y = cameraTop - 60; // Medium spawn distance
+                break;
+            case 1: // Right
+                x = cameraRight + 60;
+                y = Phaser.Math.Between(cameraTop, cameraBottom);
+                break;
+            case 2: // Bottom
+                x = Phaser.Math.Between(cameraLeft, cameraRight);
+                y = cameraBottom + 60;
+                break;
+            case 3: // Left
+                x = cameraLeft - 60;
+                y = Phaser.Math.Between(cameraTop, cameraBottom);
+                break;
+        }
+        
+        // Find walkable spawn position
+        if (this.tileMap && !this.tileMap.isWalkable(x, y)) {
+            const walkablePos = this.tileMap.getNearestWalkablePosition(x, y);
+            x = walkablePos.x;
+            y = walkablePos.y;
+        }
+        
+        // Get fast zombie from pool or create new one
+        let fastZombie = this.fastZombies.getFirstDead();
+        console.log('fastZombie from pool:', fastZombie);
+        if (!fastZombie) {
+            console.log('Creating new FastZombie at position:', x, y);
+            try {
+                fastZombie = new FastZombie(this, x, y);
+                console.log('FastZombie created successfully:', fastZombie);
+                this.fastZombies.add(fastZombie);
+                console.log('FastZombie added to group');
+            } catch (error) {
+                console.error('Error creating FastZombie:', error);
+                return;
+            }
+        } else {
+            console.log('Resetting existing FastZombie');
+            fastZombie.reset(x, y);
+        }
+    }
+
     bulletHitZombie(bullet, zombie) {
         if (!bullet.active || zombie.isDead) return;
         
@@ -806,6 +890,18 @@ export default class GameScene extends Phaser.Scene {
         bullet.destroy();
         
         // If tank zombie died, it handles its own scoring
+    }
+
+    bulletHitFastZombie(bullet, fastZombie) {
+        if (!bullet.active || fastZombie.isDead) return;
+        
+        // Damage fast zombie
+        const fastZombieDied = fastZombie.takeDamage(bullet.damage);
+        
+        // Destroy bullet
+        bullet.destroy();
+        
+        // If fast zombie died, it handles its own scoring
     }
 
     damagePlayer(damage) {
@@ -843,12 +939,27 @@ export default class GameScene extends Phaser.Scene {
             this.backgroundMusic.stop();
         }
         
-        // Start game music
-        this.backgroundMusic = this.sound.add('zombie-game', {
-            loop: true,
-            volume: 0.4 // Slightly quieter during gameplay
-        });
-        this.backgroundMusic.play();
+        // Start game music with proper audio context handling
+        this.initializeGameAudio();
+    }
+    
+    initializeGameAudio() {
+        // Check if audio context is available and unlocked
+        if (this.sound.context && this.sound.context.state === 'suspended') {
+            console.log('🔊 Audio context suspended in game, will start after interaction');
+            return; // Audio will be handled when user interacts with game
+        }
+        
+        try {
+            this.backgroundMusic = this.sound.add('zombie-game', {
+                loop: true,
+                volume: 0.4 // Slightly quieter during gameplay
+            });
+            this.backgroundMusic.play();
+            console.log('🔊 Game music started successfully');
+        } catch (error) {
+            console.error('🔊 Failed to start game music:', error);
+        }
     }
 
     gameOver() {
@@ -860,6 +971,11 @@ export default class GameScene extends Phaser.Scene {
         // Stop spawning tank zombies
         if (this.tankZombieSpawnTimer) {
             this.tankZombieSpawnTimer.destroy();
+        }
+        
+        // Stop spawning fast zombies
+        if (this.fastZombieSpawnTimer) {
+            this.fastZombieSpawnTimer.destroy();
         }
         
         // Stop game music
@@ -978,6 +1094,13 @@ export default class GameScene extends Phaser.Scene {
         
         // Kill all tank zombies
         this.tankZombies.children.entries.forEach(zombie => {
+            if (zombie.active && !zombie.isDead) {
+                zombie.die();
+            }
+        });
+        
+        // Kill all fast zombies
+        this.fastZombies.children.entries.forEach(zombie => {
             if (zombie.active && !zombie.isDead) {
                 zombie.die();
             }

@@ -215,12 +215,53 @@ export default class HighScoreScene extends Phaser.Scene {
             this.backgroundMusic.stop();
         }
         
-        // Start menu theme music
-        this.backgroundMusic = this.sound.add('zombie-theme', {
-            loop: true,
-            volume: 0.3
-        });
-        this.backgroundMusic.play();
+        // Start menu theme music with proper audio context handling
+        this.initializeAudio();
+    }
+
+    initializeAudio() {
+        // Check if audio context needs to be unlocked
+        if (this.sound.context && this.sound.context.state === 'suspended') {
+            console.log('🔊 HighScore audio context suspended, will start after user interaction');
+            
+            // Create a one-time event listener for any user interaction
+            const unlockAudio = () => {
+                console.log('🔊 HighScore user interaction detected, unlocking audio...');
+                this.sound.context.resume().then(() => {
+                    console.log('🔊 HighScore audio context resumed, starting background music');
+                    this.startHighScoreMusic();
+                    
+                    // Remove listeners after first interaction
+                    this.input.off('pointerdown', unlockAudio);
+                    this.input.keyboard?.off('keydown', unlockAudio);
+                }).catch(error => {
+                    console.error('🔊 HighScore failed to resume audio context:', error);
+                });
+            };
+            
+            // Listen for any pointer or keyboard interaction
+            this.input.once('pointerdown', unlockAudio);
+            if (this.input.keyboard) {
+                this.input.keyboard.once('keydown', unlockAudio);
+            }
+        } else {
+            // Audio context is already unlocked
+            console.log('🔊 HighScore audio context ready, starting background music immediately');
+            this.startHighScoreMusic();
+        }
+    }
+    
+    startHighScoreMusic() {
+        try {
+            this.backgroundMusic = this.sound.add('zombie-theme', {
+                loop: true,
+                volume: 0.3
+            });
+            this.backgroundMusic.play();
+            console.log('🔊 HighScore music started successfully');
+        } catch (error) {
+            console.error('🔊 HighScore failed to start music:', error);
+        }
     }
 
     returnToMenu() {
