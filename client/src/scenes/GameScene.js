@@ -3,6 +3,7 @@ import Bullet from '../sprites/Bullet.js';
 import BasicZombie from '../sprites/BasicZombie.js';
 import TankZombie from '../sprites/TankZombie.js';
 import FastZombie from '../sprites/FastZombie.js';
+import AnimatedZombie from '../sprites/AnimatedZombie.js';
 import PowerUp from '../sprites/PowerUp.js';
 import TileMap from '../world/TileMap.js';
 import VirtualJoystick from '../ui/VirtualJoystick.js';
@@ -25,9 +26,11 @@ export default class GameScene extends Phaser.Scene {
         this.zombieSpawnTimer = null;
         this.tankZombieSpawnTimer = null;
         this.fastZombieSpawnTimer = null;
+        this.animatedZombieSpawnTimer = null;
         this.zombieSpawnRate = 2000; // Start spawning every 2 seconds
         this.tankZombieSpawnRate = 8000; // Tank zombies spawn every 8 seconds
         this.fastZombieSpawnRate = 3000; // Fast zombies spawn every 3 seconds for testing
+        this.animatedZombieSpawnRate = 6000; // Animated zombies spawn every 6 seconds (less frequent due to complexity)
         this.backgroundMusic = null;
         this.tileMap = null;
         this.virtualJoystick = null;
@@ -58,9 +61,35 @@ export default class GameScene extends Phaser.Scene {
         // Load game assets
         this.load.image('banana', 'assets/banana.png');
         this.load.image('crosshair', 'assets/crosshairs.png');
-        this.load.image('zombie1', 'assets/zombie-1.png');
-        this.load.image('zombie2', 'assets/zombie-2.png');
-        this.load.image('zombie3', 'assets/zombie-3.png');
+        this.load.image('zombie1', 'assets/zombies/zombie-1.png');
+        this.load.image('zombie2', 'assets/zombies/zombie-2.png');
+        this.load.image('zombie3', 'assets/zombies/zombie-3.png');
+        
+        // Load animated zombie (zombie-4) frames
+        // Appear animation (11 frames)
+        for (let i = 1; i <= 11; i++) {
+            this.load.image(`zombie4-appear-${i}`, `assets/zombies/zombie-4/appear/appear_${i}.png`);
+        }
+        
+        // Idle animation (6 frames)  
+        for (let i = 1; i <= 6; i++) {
+            this.load.image(`zombie4-idle-${i}`, `assets/zombies/zombie-4/idle/idle_${i}.png`);
+        }
+        
+        // Walk animation (10 frames)
+        for (let i = 1; i <= 10; i++) {
+            this.load.image(`zombie4-walk-${i}`, `assets/zombies/zombie-4/walk/go_${i}.png`);
+        }
+        
+        // Attack animation (7 frames)
+        for (let i = 1; i <= 7; i++) {
+            this.load.image(`zombie4-attack-${i}`, `assets/zombies/zombie-4/attack/hit_${i}.png`);
+        }
+        
+        // Die animation (8 frames)
+        for (let i = 1; i <= 8; i++) {
+            this.load.image(`zombie4-die-${i}`, `assets/zombies/zombie-4/die/die_${i}.png`);
+        }
         this.load.audio('zombie-game', 'assets/zombie-game.mp3');
         
         // Load power-up assets with fallback handling
@@ -128,6 +157,9 @@ export default class GameScene extends Phaser.Scene {
             detectionMethod: 'improved'
         });
 
+        // Create animations for animated zombie (zombie-4)
+        this.createAnimatedZombieAnimations();
+
         // Reset game state when starting new game
         this.score = 0;
         this.gameTime = 0;
@@ -189,6 +221,13 @@ export default class GameScene extends Phaser.Scene {
             runChildUpdate: true
         });
 
+        // Create animated zombies group
+        this.animatedZombies = this.physics.add.group({
+            classType: AnimatedZombie,
+            maxSize: 15, // Limited due to animation complexity
+            runChildUpdate: true
+        });
+
         // Create power-ups group
         this.powerUps = this.physics.add.group({
             classType: PowerUp,
@@ -200,6 +239,7 @@ export default class GameScene extends Phaser.Scene {
         this.physics.add.overlap(this.bullets, this.zombies, this.bulletHitZombie, null, this);
         this.physics.add.overlap(this.bullets, this.tankZombies, this.bulletHitTankZombie, null, this);
         this.physics.add.overlap(this.bullets, this.fastZombies, this.bulletHitFastZombie, null, this);
+        this.physics.add.overlap(this.bullets, this.animatedZombies, this.bulletHitAnimatedZombie, null, this);
         this.physics.add.overlap(this.player, this.powerUps, this.playerPickupPowerUp, null, this);
 
         // Hide default cursor and use custom crosshair
@@ -242,6 +282,14 @@ export default class GameScene extends Phaser.Scene {
         this.fastZombieSpawnTimer = this.time.addEvent({
             delay: this.fastZombieSpawnRate,
             callback: this.spawnFastZombie,
+            callbackScope: this,
+            loop: true
+        });
+
+        // Start animated zombie spawning
+        this.animatedZombieSpawnTimer = this.time.addEvent({
+            delay: this.animatedZombieSpawnRate,
+            callback: this.spawnAnimatedZombie,
             callbackScope: this,
             loop: true
         });
@@ -868,6 +916,65 @@ export default class GameScene extends Phaser.Scene {
         }
     }
 
+    spawnAnimatedZombie() {
+        console.log('Spawning ANIMATED zombie...');
+        const { width, height } = this.cameras.main;
+        const camera = this.cameras.main;
+        
+        // Get camera bounds in world coordinates
+        const cameraLeft = camera.scrollX;
+        const cameraRight = camera.scrollX + width;
+        const cameraTop = camera.scrollY;
+        const cameraBottom = camera.scrollY + height;
+        
+        // Choose random edge to spawn from (relative to camera view)
+        const edge = Phaser.Math.Between(0, 3); // 0=top, 1=right, 2=bottom, 3=left
+        let x, y;
+        
+        // Spawn inside screen boundaries to show animation, but at edges for dramatic entrance
+        const margin = 50; // Distance from screen edge
+        
+        switch (edge) {
+            case 0: // Top edge, inside screen
+                x = Phaser.Math.Between(cameraLeft + margin, cameraRight - margin);
+                y = cameraTop + margin;
+                break;
+            case 1: // Right edge, inside screen
+                x = cameraRight - margin;
+                y = Phaser.Math.Between(cameraTop + margin, cameraBottom - margin);
+                break;
+            case 2: // Bottom edge, inside screen
+                x = Phaser.Math.Between(cameraLeft + margin, cameraRight - margin);
+                y = cameraBottom - margin;
+                break;
+            case 3: // Left edge, inside screen
+                x = cameraLeft + margin;
+                y = Phaser.Math.Between(cameraTop + margin, cameraBottom - margin);
+                break;
+        }
+        
+        console.log('Attempting to spawn animated zombie at:', x, y);
+        
+        // Get animated zombie from pool or create new one
+        let animatedZombie = this.animatedZombies.getFirstDead();
+        console.log('animatedZombie from pool:', animatedZombie);
+        if (!animatedZombie) {
+            console.log('Creating new AnimatedZombie at position:', x, y);
+            try {
+                animatedZombie = new AnimatedZombie(this, x, y);
+                console.log('AnimatedZombie created successfully:', animatedZombie);
+                this.animatedZombies.add(animatedZombie);
+                console.log('AnimatedZombie added to group');
+            } catch (error) {
+                console.error('Error creating AnimatedZombie:', error);
+                return;
+            }
+        } else {
+            console.log('Resetting existing AnimatedZombie');
+            animatedZombie.reset(x, y);
+        }
+    }
+
     bulletHitZombie(bullet, zombie) {
         if (!bullet.active || zombie.isDead) return;
         
@@ -902,6 +1009,20 @@ export default class GameScene extends Phaser.Scene {
         bullet.destroy();
         
         // If fast zombie died, it handles its own scoring
+    }
+
+    bulletHitAnimatedZombie(bullet, animatedZombie) {
+        if (!bullet.active || animatedZombie.isDying) return;
+        
+        console.log('Bullet hit animated zombie');
+        
+        // Damage animated zombie
+        const animatedZombieDied = animatedZombie.takeDamage(bullet.damage);
+        
+        // Destroy bullet
+        bullet.destroy();
+        
+        // If animated zombie died, it handles its own scoring and animation
     }
 
     damagePlayer(damage) {
@@ -976,6 +1097,11 @@ export default class GameScene extends Phaser.Scene {
         // Stop spawning fast zombies
         if (this.fastZombieSpawnTimer) {
             this.fastZombieSpawnTimer.destroy();
+        }
+        
+        // Stop spawning animated zombies
+        if (this.animatedZombieSpawnTimer) {
+            this.animatedZombieSpawnTimer.destroy();
         }
         
         // Stop game music
@@ -1102,6 +1228,13 @@ export default class GameScene extends Phaser.Scene {
         // Kill all fast zombies
         this.fastZombies.children.entries.forEach(zombie => {
             if (zombie.active && !zombie.isDead) {
+                zombie.die();
+            }
+        });
+        
+        // Kill all animated zombies
+        this.animatedZombies.children.entries.forEach(zombie => {
+            if (zombie.active && !zombie.isDying) {
                 zombie.die();
             }
         });
@@ -1372,6 +1505,72 @@ export default class GameScene extends Phaser.Scene {
                 }
             }
         });
+    }
+    
+    createAnimatedZombieAnimations() {
+        console.log('Creating animated zombie animations...');
+        
+        // Appear animation (11 frames) - plays once when spawning
+        const appearFrames = [];
+        for (let i = 1; i <= 11; i++) {
+            appearFrames.push({ key: `zombie4-appear-${i}` });
+        }
+        this.anims.create({
+            key: 'zombie4-appear',
+            frames: appearFrames,
+            frameRate: 12,
+            repeat: 0 // Play once
+        });
+        
+        // Idle animation (6 frames) - loops while not moving
+        const idleFrames = [];
+        for (let i = 1; i <= 6; i++) {
+            idleFrames.push({ key: `zombie4-idle-${i}` });
+        }
+        this.anims.create({
+            key: 'zombie4-idle',
+            frames: idleFrames,
+            frameRate: 6,
+            repeat: -1 // Loop forever
+        });
+        
+        // Walk animation (10 frames) - loops while moving
+        const walkFrames = [];
+        for (let i = 1; i <= 10; i++) {
+            walkFrames.push({ key: `zombie4-walk-${i}` });
+        }
+        this.anims.create({
+            key: 'zombie4-walk',
+            frames: walkFrames,
+            frameRate: 8,
+            repeat: -1 // Loop forever
+        });
+        
+        // Attack animation (7 frames) - plays once per attack
+        const attackFrames = [];
+        for (let i = 1; i <= 7; i++) {
+            attackFrames.push({ key: `zombie4-attack-${i}` });
+        }
+        this.anims.create({
+            key: 'zombie4-attack',
+            frames: attackFrames,
+            frameRate: 14,
+            repeat: 0 // Play once
+        });
+        
+        // Die animation (8 frames) - plays once when killed
+        const dieFrames = [];
+        for (let i = 1; i <= 8; i++) {
+            dieFrames.push({ key: `zombie4-die-${i}` });
+        }
+        this.anims.create({
+            key: 'zombie4-die',
+            frames: dieFrames,
+            frameRate: 10,
+            repeat: 0 // Play once
+        });
+        
+        console.log('Animated zombie animations created successfully');
     }
     
 }
