@@ -77,11 +77,21 @@ export default class AnimatedZombie extends Phaser.Physics.Arcade.Sprite {
         });
     }
     
+    // Helper method for safe animation playing
+    safePlayAnimation(animationKey) {
+        if (this.anims && this.scene.anims.exists(animationKey)) {
+            this.play(animationKey);
+            return true;
+        }
+        console.warn(`Animation not found or not ready: ${animationKey}`);
+        return false;
+    }
+    
     preUpdate(time, delta) {
         super.preUpdate(time, delta);
         
-        // Handle spawn animation flag
-        if (this.needsSpawnAnimation && this.anims) {
+        // Handle spawn animation flag with validation
+        if (this.needsSpawnAnimation && this.anims && this.scene.anims.exists('zombie4-appear')) {
             this.needsSpawnAnimation = false;
             this.play('zombie4-appear');
         }
@@ -364,6 +374,11 @@ export default class AnimatedZombie extends Phaser.Physics.Arcade.Sprite {
         });
     }
     
+    // Helper method to check if zombie can be damaged
+    isVulnerableToAttack() {
+        return this.active && !this.isDying && this.health > 0;
+    }
+    
     // Reset zombie for object pooling
     reset(x, y) {
         this.setPosition(x, y);
@@ -381,6 +396,11 @@ export default class AnimatedZombie extends Phaser.Physics.Arcade.Sprite {
         // Reactivate for pooling
         this.setActive(true);
         this.setVisible(true);
+        
+        // Cancel any existing tweens to prevent memory leaks
+        if (this.scene.tweens) {
+            this.scene.tweens.killTweensOf(this);
+        }
         
         // Only set velocity if physics body exists
         if (this.body) {

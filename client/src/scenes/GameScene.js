@@ -1012,7 +1012,7 @@ export default class GameScene extends Phaser.Scene {
     }
 
     bulletHitAnimatedZombie(bullet, animatedZombie) {
-        if (!bullet.active || animatedZombie.isDying) return;
+        if (!bullet.active || !animatedZombie.isVulnerableToAttack()) return;
         
         console.log('Bullet hit animated zombie');
         
