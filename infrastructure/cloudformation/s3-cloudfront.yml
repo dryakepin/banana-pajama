@@ -15,11 +15,9 @@ Parameters:
 
   DomainName:
     Type: String
-    Default: ""
-    Description: Custom domain name for CloudFront (optional)
+    Default: "none"
+    Description: Custom domain name for CloudFront (use 'none' to skip SSL certificate)
 
-Conditions:
-  HasCustomDomain: !Not [!Equals [!Ref DomainName, ""]]
 
 Resources:
   # S3 Bucket for Static Assets
@@ -76,8 +74,7 @@ Resources:
         Origins:
           - Id: S3Origin
             DomainName: !GetAtt StaticAssetsBucket.RegionalDomainName
-            S3OriginConfig:
-              OriginAccessIdentity: ""
+            S3OriginConfig: {}
             OriginAccessControlId: !GetAtt OriginAccessControl.Id
         
         # Default Cache Behavior
@@ -215,9 +212,6 @@ Resources:
     Properties:
       DomainName: !Ref DomainName
       ValidationMethod: DNS
-      DomainValidationOptions:
-        - DomainName: !Ref DomainName
-          HostedZoneId: !Ref AWS::NoValue
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-${Environment}-assets-ssl-cert"
@@ -259,10 +253,12 @@ Resources:
           Value: !Ref CloudFrontDistribution
       TreatMissingData: notBreaching
 
-# Conditions
+# Additional Conditions
 Conditions:
   IsProduction: !Equals [!Ref Environment, production]
-  HasCustomDomain: !Not [!Equals [!Ref DomainName, ""]]
+  HasCustomDomain: !And 
+    - !Not [!Equals [!Ref DomainName, ""]]
+    - !Not [!Equals [!Ref DomainName, "none"]]
 
 Outputs:
   StaticAssetsBucket:

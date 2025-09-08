@@ -318,10 +318,8 @@ export default class GameScene extends Phaser.Scene {
 
         // ESC to return to menu
         this.input.keyboard.on('keydown-ESC', () => {
-            // Stop game music before returning to menu
-            if (this.backgroundMusic) {
-                this.backgroundMusic.stop();
-            }
+            // Stop ALL audio before returning to menu
+            this.sound.stopAll();
             this.scene.start('MenuScene');
         });
         
@@ -1065,11 +1063,40 @@ export default class GameScene extends Phaser.Scene {
     }
     
     initializeGameAudio() {
-        // Check if audio context is available and unlocked
+        // Check if audio context needs to be unlocked
         if (this.sound.context && this.sound.context.state === 'suspended') {
-            console.log('🔊 Audio context suspended in game, will start after interaction');
-            return; // Audio will be handled when user interacts with game
+            console.log('🔊 Audio context suspended in game, will start after user interaction');
+            
+            // Create a one-time event listener for any user interaction
+            const unlockGameAudio = () => {
+                console.log('🔊 User interaction detected in game, unlocking audio...');
+                this.sound.context.resume().then(() => {
+                    console.log('🔊 Game audio context resumed, starting background music');
+                    this.startGameMusic();
+                    
+                    // Remove listeners after first interaction
+                    this.input.off('pointerdown', unlockGameAudio);
+                    this.input.keyboard?.off('keydown', unlockGameAudio);
+                }).catch(error => {
+                    console.error('🔊 Failed to resume game audio context:', error);
+                });
+            };
+            
+            // Listen for any pointer or keyboard interaction
+            this.input.once('pointerdown', unlockGameAudio);
+            if (this.input.keyboard) {
+                this.input.keyboard.once('keydown', unlockGameAudio);
+            }
+        } else {
+            // Audio context is already unlocked
+            console.log('🔊 Game audio context ready, starting background music immediately');
+            this.startGameMusic();
         }
+    }
+    
+    startGameMusic() {
+        // Stop any existing music from all sources
+        this.sound.stopAll();
         
         try {
             this.backgroundMusic = this.sound.add('zombie-game', {
@@ -1104,10 +1131,8 @@ export default class GameScene extends Phaser.Scene {
             this.animatedZombieSpawnTimer.destroy();
         }
         
-        // Stop game music
-        if (this.backgroundMusic) {
-            this.backgroundMusic.stop();
-        }
+        // Stop all game audio
+        this.sound.stopAll();
         
         // Clean up tile map
         if (this.tileMap) {
@@ -1348,10 +1373,8 @@ export default class GameScene extends Phaser.Scene {
         }).setOrigin(0.5).setScrollFactor(0);
         menuButton.setInteractive({ useHandCursor: true });
         menuButton.on('pointerdown', () => {
-            // Stop game music before returning to menu
-            if (this.backgroundMusic) {
-                this.backgroundMusic.stop();
-            }
+            // Stop ALL audio before returning to menu
+            this.sound.stopAll();
             this.scene.start('MenuScene');
         });
         menuButton.on('pointerover', () => {

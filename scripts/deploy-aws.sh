@@ -1,7 +1,12 @@
 #!/bin/bash
 
-# AWS Deployment Script for Banana Pajama Zombie Shooter
-# This script deploys the application to AWS using CloudFormation and ECS
+# AWS Game Deployment Script for Banana Pajama Zombie Shooter
+# This script deploys the game application to existing AWS infrastructure
+# 
+# Prerequisites:
+# 1. Run ./scripts/setup-aws-infrastructure.sh first to create AWS resources
+# 2. Docker must be running for image builds
+# 3. AWS CLI configured with deployment permissions
 
 set -e
 
@@ -63,16 +68,30 @@ check_prerequisites() {
     log_success "Prerequisites check passed"
 }
 
-# Function to create ECR repositories
-create_ecr_repositories() {
-    log_info "Creating ECR repositories..."
+# Function to verify ECR repositories exist
+verify_ecr_repositories() {
+    log_info "Verifying ECR repositories exist..."
     
+    local missing_repos=()
     for service in client server nginx; do
-        aws ecr describe-repositories --repository-names "${PROJECT_NAME}-${service}" --region $REGION --profile $PROFILE >/dev/null 2>&1 || \
-        aws ecr create-repository --repository-name "${PROJECT_NAME}-${service}" --region $REGION --profile $PROFILE >/dev/null
-        
-        log_success "ECR repository created: ${PROJECT_NAME}-${service}"
+        local repo_name="${PROJECT_NAME}-${service}"
+        if ! aws ecr describe-repositories --repository-names "$repo_name" --region $REGION --profile $PROFILE >/dev/null 2>&1; then
+            missing_repos+=("$repo_name")
+        else
+            log_success "✓ ECR repository ready: $repo_name"
+        fi
     done
+    
+    if [ ${#missing_repos[@]} -gt 0 ]; then
+        log_error "Missing ECR repositories: ${missing_repos[*]}"
+        log_error ""
+        log_error "🚨 REQUIRED: Run infrastructure setup first:"
+        log_error "   ./scripts/setup-aws-infrastructure.sh"
+        log_error ""
+        exit 1
+    fi
+    
+    log_success "All required ECR repositories are ready"
 }
 
 # Function to build and push Docker images
@@ -104,79 +123,170 @@ build_and_push_images() {
     log_success "Nginx image pushed"
 }
 
-# Function to deploy CloudFormation stacks
-deploy_cloudformation() {
-    log_info "Deploying CloudFormation stacks..."
+# Function to verify infrastructure exists
+verify_infrastructure() {
+    log_info "Verifying AWS infrastructure exists..."
     
-    local stack_name="$1"
-    local template_file="$2"
-    local parameters="$3"
+    local required_stacks=(
+        "${PROJECT_NAME}-${ENVIRONMENT}-vpc"
+        "${PROJECT_NAME}-${ENVIRONMENT}-security"  
+        "${PROJECT_NAME}-${ENVIRONMENT}-rds"
+        "${PROJECT_NAME}-${ENVIRONMENT}-assets"
+    )
     
+    local missing_stacks=()
+    for stack in "${required_stacks[@]}"; do
+        if aws cloudformation describe-stacks --stack-name "$stack" --region $REGION --profile $PROFILE >/dev/null 2>&1; then
+            local status=$(aws cloudformation describe-stacks --stack-name "$stack" --query 'Stacks[0].StackStatus' --output text --region $REGION --profile $PROFILE)
+            if [[ "$status" == *"COMPLETE"* ]]; then
+                log_success "✓ Infrastructure stack ready: $stack"
+            else
+                log_warning "⚠ Infrastructure stack in transition: $stack ($status)"
+            fi
+        else
+            missing_stacks+=("$stack")
+        fi
+    done
+    
+    if [ ${#missing_stacks[@]} -gt 0 ]; then
+        log_error "Missing infrastructure stacks: ${missing_stacks[*]}"
+        log_error ""
+        log_error "🚨 REQUIRED: Run infrastructure setup first:"
+        log_error "   ./scripts/setup-aws-infrastructure.sh"
+        log_error ""
+        exit 1
+    fi
+    
+    log_success "All required infrastructure stacks are ready"
+}
+
+# Function to deploy ECS application stack
+deploy_ecs_application() {
+    log_info "Deploying ECS application stack..."
+    
+    local stack_name="${PROJECT_NAME}-${ENVIRONMENT}-ecs"
+    local template_file="./infrastructure/cloudformation/ecs-minimal.yml"
+    
+    # Check if we have the required parameters
+    if [ -z "$SESSION_SECRET" ]; then
+        log_info "Generating session secret..."
+        SESSION_SECRET=$(openssl rand -base64 32 2>/dev/null || date | md5sum | head -c 32)
+    fi
+    
+    # Get database password from Secrets Manager
+    log_info "Retrieving database password from Secrets Manager..."
+    local db_secret_name="${PROJECT_NAME}-${ENVIRONMENT}-database-secret"
+    local db_password=$(aws secretsmanager get-secret-value \
+        --secret-id "$db_secret_name" \
+        --query 'SecretString' \
+        --output text \
+        --region $REGION \
+        --profile $PROFILE | jq -r '.password')
+    
+    if [ -z "$db_password" ] || [ "$db_password" = "null" ]; then
+        log_error "Could not retrieve database password from Secrets Manager"
+        exit 1
+    fi
+    
+    log_info "Deploying ECS stack: $stack_name"
     aws cloudformation deploy \
         --template-file "$template_file" \
         --stack-name "$stack_name" \
-        --parameter-overrides $parameters \
-        --capabilities CAPABILITY_IAM \
+        --parameter-overrides \
+            "ProjectName=${PROJECT_NAME}" \
+            "Environment=${ENVIRONMENT}" \
+            "SessionSecret=${SESSION_SECRET}" \
+            "DatabasePassword=${db_password}" \
+        --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
         --region $REGION \
         --profile $PROFILE
         
     if [ $? -eq 0 ]; then
-        log_success "Stack deployed: $stack_name"
+        log_success "ECS application stack deployed: $stack_name"
     else
-        log_error "Failed to deploy stack: $stack_name"
+        log_error "Failed to deploy ECS application stack: $stack_name"
         exit 1
     fi
 }
 
-# Function to prompt for parameters
+# Function to prompt for deployment parameters (optional)
 prompt_for_parameters() {
-    log_info "Please provide the following parameters:"
+    log_info "Optional: Provide session secret (will be generated if not provided)"
     
-    read -s -p "Database Password (8-41 characters): " DB_PASSWORD
+    read -s -p "Session Secret (32+ characters, or press Enter to generate): " SESSION_SECRET
     echo
     
-    read -s -p "Session Secret (32+ characters): " SESSION_SECRET
-    echo
-    
-    read -p "Domain Name (e.g., example.com): " DOMAIN_NAME
-    
-    # Validate inputs
-    if [ ${#DB_PASSWORD} -lt 8 ] || [ ${#DB_PASSWORD} -gt 41 ]; then
-        log_error "Database password must be between 8-41 characters"
+    # Validate if provided
+    if [ -n "$SESSION_SECRET" ] && [ ${#SESSION_SECRET} -lt 32 ]; then
+        log_error "Session secret must be at least 32 characters"
         exit 1
     fi
     
-    if [ ${#SESSION_SECRET} -lt 32 ]; then
-        log_error "Session secret must be at least 32 characters"
-        exit 1
+    # Generate if not provided
+    if [ -z "$SESSION_SECRET" ]; then
+        log_info "Generating session secret..."
+        SESSION_SECRET=$(openssl rand -base64 32 2>/dev/null || date | md5sum | head -c 32)
+        log_success "Session secret generated"
     fi
 }
 
 # Function to show deployment status
 show_deployment_status() {
+    log_success "🎮 Game deployment completed!"
     log_info "Deployment Status:"
     
     # Get ALB DNS name
-    ALB_DNS=$(aws cloudformation describe-stacks \
+    local alb_dns=$(aws cloudformation describe-stacks \
         --stack-name "${PROJECT_NAME}-${ENVIRONMENT}-ecs" \
         --query 'Stacks[0].Outputs[?OutputKey==`LoadBalancerDNS`].OutputValue' \
         --output text \
         --region $REGION \
-        --profile $PROFILE)
+        --profile $PROFILE 2>/dev/null)
     
-    if [ ! -z "$ALB_DNS" ]; then
-        log_success "Application deployed successfully!"
-        log_info "Load Balancer DNS: $ALB_DNS"
-        log_info "Application URL: https://$ALB_DNS"
-        log_warning "Note: You need to configure DNS to point $DOMAIN_NAME to $ALB_DNS"
+    # Get ECS service status
+    local service_status=$(aws ecs describe-services \
+        --cluster "${PROJECT_NAME}-${ENVIRONMENT}" \
+        --services "${PROJECT_NAME}-${ENVIRONMENT}" \
+        --query 'services[0].status' \
+        --output text \
+        --region $REGION \
+        --profile $PROFILE 2>/dev/null || echo "Unknown")
+    
+    # Get running task count
+    local running_tasks=$(aws ecs describe-services \
+        --cluster "${PROJECT_NAME}-${ENVIRONMENT}" \
+        --services "${PROJECT_NAME}-${ENVIRONMENT}" \
+        --query 'services[0].runningCount' \
+        --output text \
+        --region $REGION \
+        --profile $PROFILE 2>/dev/null || echo "0")
+    
+    echo
+    log_info "🎯 Application Access:"
+    if [ -n "$alb_dns" ] && [ "$alb_dns" != "None" ]; then
+        log_success "Game URL: http://$alb_dns"
+        log_info "API Health: http://$alb_dns/api/health"
+        log_info "High Scores: http://$alb_dns/api/highscores"
     else
-        log_error "Could not retrieve load balancer information"
+        log_warning "Load balancer DNS not yet available (deployment may still be in progress)"
+    fi
+    
+    echo
+    log_info "📊 Service Status:"
+    log_info "• ECS Service Status: $service_status"
+    log_info "• Running Tasks: $running_tasks"
+    
+    echo
+    if [ "$service_status" = "ACTIVE" ] && [ "$running_tasks" -gt 0 ]; then
+        log_success "🎉 Game is running and ready to play!"
+    else
+        log_warning "⏳ Deployment in progress - check ECS console for details"
     fi
 }
 
 # Main deployment function
 main() {
-    log_info "🍌 Starting AWS deployment for Banana Pajama Zombie Shooter"
+    log_info "🎮 Starting game deployment for Banana Pajama Zombie Shooter"
     
     # Parse command line arguments
     while [[ $# -gt 0 ]]; do
@@ -193,11 +303,33 @@ main() {
                 PROFILE="$2"
                 shift 2
                 ;;
+            --skip-build)
+                SKIP_BUILD=true
+                shift
+                ;;
             --help)
-                echo "Usage: $0 [--environment ENV] [--region REGION] [--profile PROFILE]"
-                echo "  --environment: deployment environment (default: production)"
-                echo "  --region: AWS region (default: us-east-1)"
-                echo "  --profile: AWS profile (default: default)"
+                echo "Usage: $0 [OPTIONS]"
+                echo ""
+                echo "🎮 Deploys the Banana Pajama Zombie Shooter game to existing AWS infrastructure"
+                echo ""
+                echo "This script ONLY handles game deployment - it does NOT create infrastructure."
+                echo ""
+                echo "Options:"
+                echo "  --environment ENV    Deployment environment (default: production)"
+                echo "  --region REGION      AWS region (default: us-east-1)"
+                echo "  --profile PROFILE    AWS profile (default: default)"
+                echo "  --skip-build         Skip Docker image build/push (use existing images)"
+                echo ""
+                echo "📋 Two-Step Process:"
+                echo "  1. First time:  ./scripts/setup-aws-infrastructure.sh  (creates AWS resources)"
+                echo "  2. Deploy game: ./scripts/deploy-aws.sh               (deploys application)"
+                echo ""
+                echo "🔄 For subsequent deployments, only run step 2"
+                echo ""
+                echo "Prerequisites:"
+                echo "• AWS infrastructure must exist (VPC, RDS, ECR repositories, etc.)"
+                echo "• Docker must be running for image builds"
+                echo "• AWS CLI configured with deployment permissions"
                 exit 0
                 ;;
             *)
@@ -207,77 +339,59 @@ main() {
         esac
     done
     
+    log_info "Configuration:"
+    log_info "• Environment: $ENVIRONMENT"
+    log_info "• Region: $REGION"
+    log_info "• Profile: $PROFILE"
+    log_info "• Skip Build: ${SKIP_BUILD:-false}"
+    echo
+    
     # Get AWS Account ID
     AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text --profile $PROFILE)
     
     # Check prerequisites
     check_prerequisites
     
-    # Prompt for sensitive parameters
-    prompt_for_parameters
+    # Verify infrastructure exists
+    verify_infrastructure
     
-    # Create ECR repositories
-    create_ecr_repositories
+    # Verify ECR repositories exist
+    verify_ecr_repositories
     
-    # Build and push images
-    build_and_push_images
+    # Build and push images (unless skipped)
+    if [ "$SKIP_BUILD" != "true" ]; then
+        # Prompt for parameters (session secret)
+        prompt_for_parameters
+        
+        # Build and push images
+        build_and_push_images
+    else
+        log_info "Skipping Docker image build (--skip-build flag used)"
+        # Still need session secret for deployment
+        prompt_for_parameters
+    fi
     
-    # Deploy infrastructure stacks
-    log_info "Deploying infrastructure stacks..."
-    
-    # 1. VPC and Networking
-    deploy_cloudformation \
-        "${PROJECT_NAME}-${ENVIRONMENT}-vpc" \
-        "./infrastructure/cloudformation/vpc-networking.yml" \
-        "ProjectName=${PROJECT_NAME} Environment=${ENVIRONMENT}"
-    
-    # 2. Security Groups
-    deploy_cloudformation \
-        "${PROJECT_NAME}-${ENVIRONMENT}-security" \
-        "./infrastructure/cloudformation/security-groups.yml" \
-        "ProjectName=${PROJECT_NAME} Environment=${ENVIRONMENT}"
-    
-    # 3. RDS Database
-    deploy_cloudformation \
-        "${PROJECT_NAME}-${ENVIRONMENT}-rds" \
-        "./infrastructure/cloudformation/rds-database.yml" \
-        "ProjectName=${PROJECT_NAME} Environment=${ENVIRONMENT} DatabasePassword=${DB_PASSWORD}"
-    
-    # Wait for RDS to be available
-    log_info "Waiting for RDS instance to be available..."
-    aws rds wait db-instance-available \
-        --db-instance-identifier "${PROJECT_NAME}-${ENVIRONMENT}-db" \
-        --region $REGION \
-        --profile $PROFILE
-    
-    # Get database endpoint
-    DATABASE_ENDPOINT=$(aws rds describe-db-instances \
-        --db-instance-identifier "${PROJECT_NAME}-${ENVIRONMENT}-db" \
-        --query 'DBInstances[0].Endpoint.Address' \
-        --output text \
-        --region $REGION \
-        --profile $PROFILE)
-    
-    # 4. S3 and CloudFront (optional)
-    deploy_cloudformation \
-        "${PROJECT_NAME}-${ENVIRONMENT}-assets" \
-        "./infrastructure/cloudformation/s3-cloudfront.yml" \
-        "ProjectName=${PROJECT_NAME} Environment=${ENVIRONMENT} DomainName=${DOMAIN_NAME}"
-    
-    # 5. ECS Fargate
-    deploy_cloudformation \
-        "${PROJECT_NAME}-${ENVIRONMENT}-ecs" \
-        "./infrastructure/cloudformation/ecs-fargate.yml" \
-        "ProjectName=${PROJECT_NAME} Environment=${ENVIRONMENT} DatabasePassword=${DB_PASSWORD} SessionSecret=${SESSION_SECRET} DomainName=${DOMAIN_NAME}"
+    # Deploy ECS application
+    deploy_ecs_application
     
     # Show deployment status
+    echo
     show_deployment_status
     
-    log_success "🎉 Deployment completed successfully!"
-    log_info "Next steps:"
-    log_info "1. Configure your DNS to point ${DOMAIN_NAME} to the load balancer"
-    log_info "2. Complete SSL certificate validation"
-    log_info "3. Test your application"
+    echo
+    log_success "🎉 Game deployment completed successfully!"
+    echo
+    log_info "📋 Next steps:"
+    log_info "• Game should be accessible via the URL above"
+    log_info "• Check ECS console if deployment is still in progress"
+    log_info "• Monitor CloudWatch logs for any issues"
+    echo
+    log_info "🔄 For future deployments:"
+    log_info "• Code changes: Just run ./scripts/deploy-aws.sh again"
+    log_info "• Quick updates: Use ./scripts/deploy-aws.sh --skip-build"
+    echo
+    log_info "🧹 When finished:"
+    log_info "• Use ./scripts/teardown-aws.sh to clean up AWS resources"
 }
 
 # Run main function

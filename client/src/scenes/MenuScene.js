@@ -153,19 +153,15 @@ export default class MenuScene extends Phaser.Scene {
     }
 
     startGame() {
-        // Stop menu music before switching scenes
-        if (this.backgroundMusic) {
-            this.backgroundMusic.stop();
-        }
+        // Stop ALL audio before switching scenes
+        this.sound.stopAll();
         this.cleanupTweens();
         this.scene.start('GameScene');
     }
 
     showHighScores() {
-        // Stop menu music before switching scenes
-        if (this.backgroundMusic) {
-            this.backgroundMusic.stop();
-        }
+        // Stop ALL audio before switching scenes
+        this.sound.stopAll();
         this.cleanupTweens();
         this.scene.start('HighScoreScene');
     }

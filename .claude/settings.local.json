@@ -53,7 +53,15 @@
       "Bash(aws ec2 describe-network-interfaces:*)",
       "Bash(aws ec2 authorize-security-group-ingress:*)",
       "Bash(aws secretsmanager get-secret-value:*)",
-      "Bash(aws secretsmanager list-secrets:*)"
+      "Bash(aws secretsmanager list-secrets:*)",
+      "Bash(aws elbv2 deregister-targets:*)",
+      "WebSearch",
+      "Bash(docker ps:*)",
+      "Bash(./scripts/update-ecs-game.sh:*)",
+      "Bash(bash:*)",
+      "Bash(aws s3api delete-bucket:*)",
+      "Bash(aws cloudfront list-distributions:*)",
+      "Bash(docker exec:*)"
     ],
     "deny": []
   }
