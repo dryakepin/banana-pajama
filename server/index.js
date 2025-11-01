@@ -3,31 +3,11 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
-const { Pool } = require('pg');
+const pool = require('./config/database');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-
-// Database connection
-const pool = new Pool({
-    host: process.env.DB_HOST || 'localhost',
-    port: process.env.DB_PORT || 5432,
-    database: process.env.DB_NAME || 'banana_pajama',
-    user: process.env.DB_USER || 'postgres',
-    password: process.env.DB_PASSWORD || 'banana_dev_password',
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
-});
-
-// Test database connection
-pool.connect((err, client, release) => {
-    if (err) {
-        console.error('❌ Error connecting to database:', err);
-    } else {
-        console.log('✅ Database connected successfully');
-        release();
-    }
-});
 
 // Security middleware
 app.use(helmet());
@@ -304,9 +284,14 @@ app.use('*', (req, res) => {
 
 // Start server
 app.listen(PORT, '0.0.0.0', () => {
+    const dbProvider = process.env.DB_PROVIDER || (process.env.DATABASE_URL ? 'supabase' : 'local');
+    const dbInfo = process.env.DATABASE_URL 
+        ? 'Supabase (connection string)' 
+        : `${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || 5432}`;
+    
     console.log(`🍌 Banana Pajama API Server running on port ${PORT}`);
     console.log(`🔗 Health check: http://localhost:${PORT}/health`);
     console.log(`🔗 API Health: http://localhost:${PORT}/api/health`);
     console.log(`🎮 Client URL: ${process.env.CORS_ORIGIN || 'http://localhost:8080'}`);
-    console.log(`🗄️ Database: ${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || 5432}`);
+    console.log(`🗄️ Database: ${dbInfo} (${dbProvider})`);
 });

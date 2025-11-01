@@ -133,7 +133,11 @@ banana-pajama/
 │   ├── models/            # Database models
 │   └── middleware/        # Express middleware
 ├── database/              # PostgreSQL migrations
+│   ├── init.sql          # Local Docker setup script
+│   └── init-supabase.sql # Supabase-compatible script
 ├── docker/                # Docker configuration
+├── docs/                  # Documentation
+│   └── SUPABASE_DEPLOYMENT.md  # Supabase setup guide
 └── infrastructure/        # AWS deployment scripts
 ```
 
@@ -204,6 +208,40 @@ Free tier eligible services minimize costs:
 **Estimated cost after free tier**: $15-25/month
 
 See [infrastructure/aws-setup.md](infrastructure/aws-setup.md) for detailed deployment guide.
+
+## 🗄️ Supabase Database Support
+
+The application now supports Supabase as a database option alongside local Docker and AWS RDS.
+
+### Quick Setup with Supabase
+
+1. **Create a Supabase project** at [supabase.com](https://supabase.com)
+2. **Get your connection string** from Settings → Database
+3. **Run the migration**:
+   ```bash
+   export DATABASE_URL="postgresql://postgres:[PASSWORD]@[PROJECT].supabase.co:5432/postgres"
+   node scripts/migrate-supabase.js
+   ```
+4. **Configure your server** with `DATABASE_URL` environment variable
+
+### Using Supabase with Docker
+
+```bash
+# Set DATABASE_URL in .env file or environment
+export DATABASE_URL="postgresql://postgres:[PASSWORD]@[PROJECT].supabase.co:5432/postgres"
+
+# Start server and client (database service not needed)
+cd docker
+docker-compose up server client
+```
+
+### Database Options
+
+- **Local Docker**: Default setup with PostgreSQL container
+- **Supabase**: Managed PostgreSQL with connection pooling
+- **AWS RDS**: Production-grade PostgreSQL instance
+
+All options use the same schema and are fully compatible. See [docs/SUPABASE_DEPLOYMENT.md](docs/SUPABASE_DEPLOYMENT.md) for complete Supabase setup guide.
 
 ## 🤝 Contributing
 

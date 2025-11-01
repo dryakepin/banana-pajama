@@ -1,6 +1,11 @@
 services:
   # PostgreSQL Database
+  # Note: This service is only needed for local Docker development
+  # When using Supabase or external database, omit this service
+  # Use profile 'local-db' to start only when needed
   database:
+    profiles:
+      - local-db
     image: postgres:15-alpine
     container_name: banana_pajama_db
     restart: unless-stopped
@@ -33,11 +38,17 @@ services:
     environment:
       NODE_ENV: development
       PORT: 3000
-      DB_HOST: database
-      DB_PORT: 5432
-      DB_NAME: banana_pajama
-      DB_USER: postgres
+      # Database configuration - supports multiple providers:
+      # - Local Docker: Set DB_HOST=database (default)
+      # - Supabase: Set DATABASE_URL or DB_PROVIDER=supabase with Supabase credentials
+      DB_HOST: ${DB_HOST:-database}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME:-banana_pajama}
+      DB_USER: ${DB_USER:-postgres}
       DB_PASSWORD: ${DB_PASSWORD:-banana_dev_password}
+      DATABASE_URL: ${DATABASE_URL:-}
+      DB_PROVIDER: ${DB_PROVIDER:-}
+      USE_CONNECTION_POOLING: ${USE_CONNECTION_POOLING:-false}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8080}
       SESSION_SECRET: ${SESSION_SECRET:-dev_session_secret_change_in_production}
     volumes:
@@ -46,6 +57,11 @@ services:
       - /app/node_modules
     ports:
       - "3000:3000"
+    # Database dependency - only needed for local Docker database
+    # When using Supabase, start without local-db profile:
+    #   docker-compose up server client
+    # When using local database, start with profile:
+    #   docker-compose --profile local-db up
     depends_on:
       database:
         condition: service_healthy
@@ -80,7 +96,10 @@ services:
       - banana_pajama_network
 
   # Development Tools (optional)
+  # Note: Adminer requires local database service
   adminer:
+    profiles:
+      - local-db
     image: adminer:latest
     container_name: banana_pajama_adminer
     restart: unless-stopped

@@ -61,7 +61,10 @@
       "Bash(bash:*)",
       "Bash(aws s3api delete-bucket:*)",
       "Bash(aws cloudfront list-distributions:*)",
-      "Bash(docker exec:*)"
+      "Bash(docker exec:*)",
+      "Bash(rm:*)",
+      "Bash(git -C /Users/kaarekjelstroem/Code/banana-pajama log --oneline --graph -20)",
+      "Bash(git -C /Users/kaarekjelstroem/Code/banana-pajama log --oneline --all --decorate -10)"
     ],
     "deny": []
   }
