@@ -137,8 +137,8 @@ banana-pajama/
 │   └── init-supabase.sql # Supabase-compatible script
 ├── docker/                # Docker configuration
 ├── docs/                  # Documentation
-│   └── SUPABASE_DEPLOYMENT.md  # Supabase setup guide
-└── infrastructure/        # AWS deployment scripts
+│   ├── SUPABASE_DEPLOYMENT.md  # Supabase setup guide
+│   └── VERCEL_DEBUGGING.md     # Vercel debugging guide
 ```
 
 ## 🎨 Art & Audio Specifications
@@ -173,45 +173,24 @@ docker-compose up --build
 docker-compose -f docker-compose.prod.yml up -d
 ```
 
-## 🚀 AWS Deployment
+## 🚀 Vercel Deployment
 
 ### Production Deployment
 
-Deploy to AWS using ECS Fargate with a single command:
+Deploy to Vercel with automatic deployments from GitHub:
 
-```bash
-# 1. Setup AWS account (first time only)
-./scripts/aws-account-setup.sh
+1. **Connect your repository** to Vercel
+2. **Set environment variables** in Vercel dashboard:
+   - `DATABASE_URL` - Your Supabase connection string
+   - `CORS_ORIGIN` - Your Vercel app URL
+   - `NODE_ENV` - Set to `production`
+3. **Deploy** - Vercel automatically deploys on push to main branch
 
-# 2. Deploy to AWS (interactive)
-./scripts/deploy-aws.sh
-```
-
-### AWS Architecture
-
-- **ECS Fargate** - Serverless container hosting with auto-scaling
-- **Application Load Balancer** - Traffic distribution and SSL termination  
-- **RDS PostgreSQL** - Managed database service (Multi-AZ for HA)
-- **S3 + CloudFront** - Global CDN for static assets and caching
-- **Certificate Manager** - Free SSL certificates
-- **Secrets Manager** - Secure credential storage
-
-### Cost Optimization
-
-Free tier eligible services minimize costs:
-- **ECS Fargate**: 400 vCPU hours/month free
-- **RDS db.t3.micro**: 750 hours/month free
-- **S3**: 5GB storage + 20,000 GET requests free
-- **CloudFront**: 50GB data transfer free
-- **Application Load Balancer**: 750 hours/month free
-
-**Estimated cost after free tier**: $15-25/month
-
-See [infrastructure/aws-setup.md](infrastructure/aws-setup.md) for detailed deployment guide.
+See [docs/VERCEL_DEBUGGING.md](docs/VERCEL_DEBUGGING.md) for detailed setup and troubleshooting.
 
 ## 🗄️ Supabase Database Support
 
-The application now supports Supabase as a database option alongside local Docker and AWS RDS.
+The application supports Supabase as the primary database option alongside local Docker.
 
 ### Quick Setup with Supabase
 
@@ -237,11 +216,10 @@ docker-compose up server client
 
 ### Database Options
 
-- **Local Docker**: Default setup with PostgreSQL container
-- **Supabase**: Managed PostgreSQL with connection pooling
-- **AWS RDS**: Production-grade PostgreSQL instance
+- **Local Docker**: Default setup with PostgreSQL container (for development)
+- **Supabase**: Managed PostgreSQL with connection pooling (recommended for production)
 
-All options use the same schema and are fully compatible. See [docs/SUPABASE_DEPLOYMENT.md](docs/SUPABASE_DEPLOYMENT.md) for complete Supabase setup guide.
+Both options use the same schema and are fully compatible. See [docs/SUPABASE_DEPLOYMENT.md](docs/SUPABASE_DEPLOYMENT.md) for complete Supabase setup guide.
 
 ## 🤝 Contributing
 

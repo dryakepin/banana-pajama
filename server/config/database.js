@@ -4,7 +4,6 @@ const { Pool } = require('pg');
  * Database Connection Configuration
  * Supports multiple database providers:
  * - Local Docker Compose (PostgreSQL)
- * - AWS RDS (PostgreSQL)
  * - Supabase (PostgreSQL)
  */
 function createDatabasePool() {
@@ -48,7 +47,7 @@ function createDatabasePool() {
         });
     }
 
-    // Default: Local Docker Compose or AWS RDS
+    // Default: Local Docker Compose
     return new Pool({
         host: process.env.DB_HOST || 'localhost',
         port: process.env.DB_PORT || 5432,

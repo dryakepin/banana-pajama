@@ -248,7 +248,7 @@ postgresql://postgres:[PASSWORD]@[PROJECT-REF].supabase.co:6543/postgres?pgbounc
 
 ## Migration from Local/RDS Database
 
-If you're migrating from a local Docker database or AWS RDS:
+If you're migrating from a local Docker database:
 
 1. **Export data** (if you have existing data):
    ```bash
