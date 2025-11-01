@@ -282,16 +282,21 @@ app.use('*', (req, res) => {
     });
 });
 
-// Start server
-app.listen(PORT, '0.0.0.0', () => {
-    const dbProvider = process.env.DB_PROVIDER || (process.env.DATABASE_URL ? 'supabase' : 'local');
-    const dbInfo = process.env.DATABASE_URL 
-        ? 'Supabase (connection string)' 
-        : `${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || 5432}`;
-    
-    console.log(`🍌 Banana Pajama API Server running on port ${PORT}`);
-    console.log(`🔗 Health check: http://localhost:${PORT}/health`);
-    console.log(`🔗 API Health: http://localhost:${PORT}/api/health`);
-    console.log(`🎮 Client URL: ${process.env.CORS_ORIGIN || 'http://localhost:8080'}`);
-    console.log(`🗄️ Database: ${dbInfo} (${dbProvider})`);
-});
+// Export for Vercel serverless function
+module.exports = app;
+
+// Start server (for local development)
+if (require.main === module) {
+    app.listen(PORT, '0.0.0.0', () => {
+        const dbProvider = process.env.DB_PROVIDER || (process.env.DATABASE_URL ? 'supabase' : 'local');
+        const dbInfo = process.env.DATABASE_URL 
+            ? 'Supabase (connection string)' 
+            : `${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || 5432}`;
+        
+        console.log(`🍌 Banana Pajama API Server running on port ${PORT}`);
+        console.log(`🔗 Health check: http://localhost:${PORT}/health`);
+        console.log(`🔗 API Health: http://localhost:${PORT}/api/health`);
+        console.log(`🎮 Client URL: ${process.env.CORS_ORIGIN || 'http://localhost:8080'}`);
+        console.log(`🗄️ Database: ${dbInfo} (${dbProvider})`);
+    });
+}

@@ -6,7 +6,17 @@
   "devCommand": "cd client && npm run dev",
   "installCommand": "cd client && npm install",
   "framework": null,
+  "functions": {
+    "server/index.js": {
+      "runtime": "nodejs18.x",
+      "maxDuration": 30
+    }
+  },
   "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/server/index.js"
+    },
     {
       "source": "/(.*)",
       "destination": "/index.html"
