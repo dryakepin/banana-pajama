@@ -7,10 +7,13 @@ const { Pool } = require('pg');
 
 // Create database connection
 function getPool() {
-    const connectionString = process.env.DATABASE_URL;
+    // Support multiple environment variable names from Vercel-Supabase integration
+    const connectionString = process.env.DATABASE_URL ||
+                            process.env.POSTGRES_URL ||
+                            process.env.POSTGRES_PRISMA_URL;
 
     if (!connectionString) {
-        throw new Error('DATABASE_URL environment variable is required');
+        throw new Error('Database connection string not found. Please set DATABASE_URL, POSTGRES_URL, or POSTGRES_PRISMA_URL environment variable');
     }
 
     return new Pool({

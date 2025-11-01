@@ -65,7 +65,8 @@
       "Bash(rm:*)",
       "Bash(git -C /Users/kaarekjelstroem/Code/banana-pajama log --oneline --graph -20)",
       "Bash(git -C /Users/kaarekjelstroem/Code/banana-pajama log --oneline --all --decorate -10)",
-      "Bash(npm install)"
+      "Bash(npm install)",
+      "Bash(git commit:*)"
     ],
     "deny": []
   }
