@@ -30,5 +30,8 @@
   },
   "keywords": ["api", "express", "postgresql", "game-backend"],
   "author": "Banana Pajama Dev Team",
-  "license": "MIT"
+  "license": "MIT",
+  "engines": {
+    "node": "18.x"
+  }
 }
