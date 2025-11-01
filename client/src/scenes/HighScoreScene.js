@@ -25,22 +25,28 @@ export default class HighScoreScene extends Phaser.Scene {
         this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
                        (('ontouchstart' in window) && (window.innerWidth <= 768 || window.innerHeight <= 768));
 
+        // Responsive sizing for mobile
+        const titleSize = this.isMobile ? '32px' : '48px';
+        const trophySize = this.isMobile ? '20px' : '32px';
+        const titleY = this.isMobile ? height * 0.06 : 80;
+        const trophyY = this.isMobile ? height * 0.11 : 130;
+
         // Dark background
         this.add.rectangle(width / 2, height / 2, width, height, 0x1a1a2e);
 
         // Title
-        this.add.text(width / 2, 80, 'HIGH SCORES', {
-            fontSize: '48px',
+        this.add.text(width / 2, titleY, 'HIGH SCORES', {
+            fontSize: titleSize,
             fontFamily: 'Courier New, monospace',
             color: '#ffff00',
             align: 'center',
             stroke: '#000000',
-            strokeThickness: 3
+            strokeThickness: this.isMobile ? 2 : 3
         }).setOrigin(0.5);
 
         // Trophy emoji
-        this.add.text(width / 2, 130, '🏆', {
-            fontSize: '32px',
+        this.add.text(width / 2, trophyY, '🏆', {
+            fontSize: trophySize,
             align: 'center'
         }).setOrigin(0.5);
 
@@ -65,13 +71,15 @@ export default class HighScoreScene extends Phaser.Scene {
             loadingText.setStyle({ color: '#ff4444' });
         }
 
-        // Back button
-        const backBtn = this.add.text(width / 2, height - 80, 'BACK TO MENU', {
-            fontSize: '24px',
+        // Back button - more compact on mobile
+        const backBtnY = this.isMobile ? height - 50 : height - 80;
+        const backBtnSize = this.isMobile ? '18px' : '24px';
+        const backBtn = this.add.text(width / 2, backBtnY, 'BACK TO MENU', {
+            fontSize: backBtnSize,
             fontFamily: 'Courier New, monospace',
             color: '#ffffff',
             backgroundColor: '#333333',
-            padding: { x: 20, y: 10 }
+            padding: this.isMobile ? { x: 15, y: 8 } : { x: 20, y: 10 }
         })
         .setOrigin(0.5)
         .setInteractive({ useHandCursor: true })
@@ -82,13 +90,15 @@ export default class HighScoreScene extends Phaser.Scene {
         // Keyboard shortcut
         this.input.keyboard.on('keydown-ESC', () => this.returnToMenu());
 
-        // Instructions
-        this.add.text(width / 2, height - 40, 'ESC to return to main menu', {
-            fontSize: '16px',
-            fontFamily: 'Courier New, monospace',
-            color: '#888888',
-            align: 'center'
-        }).setOrigin(0.5);
+        // Instructions - hide on mobile or make smaller
+        if (!this.isMobile) {
+            this.add.text(width / 2, height - 40, 'ESC to return to main menu', {
+                fontSize: '16px',
+                fontFamily: 'Courier New, monospace',
+                color: '#888888',
+                align: 'center'
+            }).setOrigin(0.5);
+        }
 
         // Start background music
         this.startBackgroundMusic();
@@ -110,58 +120,79 @@ export default class HighScoreScene extends Phaser.Scene {
         this.scrollContainer = this.add.container(0, 0);
         this.scrollY = 0;
         
+        // Calculate responsive spacing for mobile
+        const titleAreaHeight = this.isMobile ? height * 0.15 : 180;
+        const buttonAreaHeight = this.isMobile ? height * 0.12 : 140;
+        const maskStartY = this.isMobile ? height * 0.14 : 180;
+        const maskHeight = height - titleAreaHeight - buttonAreaHeight;
+        
         // Create a mask to limit visible area
-        const maskHeight = height - 320; // Leave space for title and buttons
         this.scrollMask = this.make.graphics();
         this.scrollMask.fillStyle(0x1a1a2e);
-        this.scrollMask.fillRect(0, 180, width, maskHeight);
+        this.scrollMask.fillRect(0, maskStartY, width, maskHeight);
         
         // Apply mask to container
         this.scrollContainer.setMask(this.scrollMask.createGeometryMask());
+        
+        // Store mask info for scrolling setup
+        this.maskStartY = maskStartY;
+        this.maskHeight = maskHeight;
     }
 
     displayHighScores() {
         const { width, height } = this.cameras.main;
-        const startY = 200;
-        const lineHeight = 35;
+        
+        // Responsive sizing for mobile
+        const lineHeight = this.isMobile ? 26 : 35;
+        const headerSize = this.isMobile ? '14px' : '18px';
+        const scoreSize = this.isMobile ? '16px' : '20px';
+        
+        // Calculate start positions responsively
+        const headerY = this.isMobile ? height * 0.13 : 170;
+        const startY = this.isMobile ? height * 0.16 : 200;
         
         // Clear container if recreating
         if (this.scrollContainer && this.scrollContainer.list.length > 0) {
             this.scrollContainer.removeAll(true);
         }
 
-        // Headers (outside scroll container, fixed position)
-        const headerY = startY - 30;
-        this.add.text(width / 2 - 200, headerY, 'RANK', {
-            fontSize: '18px',
+        // Headers (outside scroll container, fixed position) - compact on mobile
+        const rankX = this.isMobile ? width * 0.08 : width / 2 - 200;
+        const playerX = this.isMobile ? width * 0.23 : width / 2 - 120;
+        const scoreX = this.isMobile ? width * 0.55 : width / 2 + 50;
+        const timeX = this.isMobile ? width * 0.70 : width / 2 + 130;
+        const killsX = this.isMobile ? width * 0.85 : width / 2 + 220;
+
+        this.add.text(rankX, headerY, 'RANK', {
+            fontSize: headerSize,
             fontFamily: 'Courier New, monospace',
             color: '#cccccc',
             fontStyle: 'bold'
         });
 
-        this.add.text(width / 2 - 120, headerY, 'PLAYER', {
-            fontSize: '18px',
+        this.add.text(playerX, headerY, 'PLAYER', {
+            fontSize: headerSize,
             fontFamily: 'Courier New, monospace',
             color: '#cccccc',
             fontStyle: 'bold'
         });
 
-        this.add.text(width / 2 + 50, headerY, 'SCORE', {
-            fontSize: '18px',
+        this.add.text(scoreX, headerY, 'SCORE', {
+            fontSize: headerSize,
             fontFamily: 'Courier New, monospace',
             color: '#cccccc',
             fontStyle: 'bold'
         });
 
-        this.add.text(width / 2 + 130, headerY, 'TIME', {
-            fontSize: '18px',
+        this.add.text(timeX, headerY, 'TIME', {
+            fontSize: headerSize,
             fontFamily: 'Courier New, monospace',
             color: '#cccccc',
             fontStyle: 'bold'
         });
 
-        this.add.text(width / 2 + 220, headerY, 'KILLS', {
-            fontSize: '18px',
+        this.add.text(killsX, headerY, 'KILLS', {
+            fontSize: headerSize,
             fontFamily: 'Courier New, monospace',
             color: '#cccccc',
             fontStyle: 'bold'
@@ -187,37 +218,44 @@ export default class HighScoreScene extends Phaser.Scene {
                 rankColor = '#cd7f32';
             }
 
+            // Use responsive positions from headers
+            const rankX = this.isMobile ? width * 0.08 : width / 2 - 200;
+            const playerX = this.isMobile ? width * 0.23 : width / 2 - 120;
+            const scoreX = this.isMobile ? width * 0.55 : width / 2 + 50;
+            const timeX = this.isMobile ? width * 0.70 : width / 2 + 130;
+            const killsX = this.isMobile ? width * 0.85 : width / 2 + 220;
+
             // Rank - position relative to container
             const rankTextObj = this.add.text(0, 0, rankText, {
-                fontSize: '20px',
+                fontSize: scoreSize,
                 fontFamily: 'Courier New, monospace',
                 color: rankColor,
                 fontStyle: rank <= 3 ? 'bold' : 'normal'
             });
-            rankTextObj.setPosition(width / 2 - 200, y);
+            rankTextObj.setPosition(rankX, y);
             this.scrollContainer.add(rankTextObj);
 
             // Player name (truncate if too long on mobile)
-            const maxNameLength = this.isMobile ? 10 : 12;
+            const maxNameLength = this.isMobile ? 8 : 12;
             const playerName = score.player_name.length > maxNameLength 
                 ? score.player_name.substring(0, maxNameLength) + '...'
                 : score.player_name;
             
             const playerTextObj = this.add.text(0, 0, playerName, {
-                fontSize: '20px',
+                fontSize: scoreSize,
                 fontFamily: 'Courier New, monospace',
                 color: '#ffffff'
             });
-            playerTextObj.setPosition(width / 2 - 120, y);
+            playerTextObj.setPosition(playerX, y);
             this.scrollContainer.add(playerTextObj);
 
             // Score with formatting
             const scoreTextObj = this.add.text(0, 0, score.score.toLocaleString(), {
-                fontSize: '20px',
+                fontSize: scoreSize,
                 fontFamily: 'Courier New, monospace',
                 color: '#00ff00'
             });
-            scoreTextObj.setPosition(width / 2 + 50, y);
+            scoreTextObj.setPosition(scoreX, y);
             this.scrollContainer.add(scoreTextObj);
 
             // Survival time formatted as MM:SS
@@ -226,26 +264,26 @@ export default class HighScoreScene extends Phaser.Scene {
             const timeString = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
             
             const timeTextObj = this.add.text(0, 0, timeString, {
-                fontSize: '20px',
+                fontSize: scoreSize,
                 fontFamily: 'Courier New, monospace',
                 color: '#ffaa00'
             });
-            timeTextObj.setPosition(width / 2 + 130, y);
+            timeTextObj.setPosition(timeX, y);
             this.scrollContainer.add(timeTextObj);
 
             // Zombie kills
             const killsTextObj = this.add.text(0, 0, score.zombies_killed.toString(), {
-                fontSize: '20px',
+                fontSize: scoreSize,
                 fontFamily: 'Courier New, monospace',
                 color: '#ff6666'
             });
-            killsTextObj.setPosition(width / 2 + 220, y);
+            killsTextObj.setPosition(killsX, y);
             this.scrollContainer.add(killsTextObj);
         });
         
         // Calculate max scroll based on content height
         const contentHeight = this.highScores.length * lineHeight;
-        const visibleHeight = height - 320; // Space for title, headers, buttons
+        const visibleHeight = this.maskHeight || (height - 320);
         this.maxScrollY = Math.max(0, contentHeight - visibleHeight);
         
         // Set initial position
@@ -275,8 +313,10 @@ export default class HighScoreScene extends Phaser.Scene {
             return; // No scrolling needed
         }
 
-        // Create a scrollable zone (invisible interactive area)
-        const scrollZone = this.add.zone(width / 2, 180 + (height - 320) / 2, width, height - 320);
+        // Create a scrollable zone (invisible interactive area) - use calculated mask dimensions
+        const zoneCenterY = (this.maskStartY || 180) + (this.maskHeight || (height - 320)) / 2;
+        const zoneHeight = this.maskHeight || (height - 320);
+        const scrollZone = this.add.zone(width / 2, zoneCenterY, width, zoneHeight);
         scrollZone.setInteractive({ useHandCursor: false });
         
         // Track scrolling state
@@ -319,8 +359,9 @@ export default class HighScoreScene extends Phaser.Scene {
                     this.maxScrollY
                 );
                 
-                // Move container
-                this.scrollContainer.setY(200 - this.scrollY);
+                // Move container - use responsive startY
+                const startY = this.isMobile ? this.cameras.main.height * 0.16 : 200;
+                this.scrollContainer.setY(startY - this.scrollY);
                 this.updateScrollIndicator();
                 
                 this.lastPointerY = pointer.y;
@@ -349,7 +390,8 @@ export default class HighScoreScene extends Phaser.Scene {
                             0,
                             this.maxScrollY
                         );
-                        this.scrollContainer.setY(200 - this.scrollY);
+                        const startY = this.isMobile ? this.cameras.main.height * 0.16 : 200;
+                        this.scrollContainer.setY(startY - this.scrollY);
                         this.updateScrollIndicator();
                         
                         // Apply friction
@@ -375,7 +417,8 @@ export default class HighScoreScene extends Phaser.Scene {
                     0,
                     this.maxScrollY
                 );
-                this.scrollContainer.setY(200 - this.scrollY);
+                const startY = this.isMobile ? this.cameras.main.height * 0.16 : 200;
+                this.scrollContainer.setY(startY - this.scrollY);
                 this.updateScrollIndicator();
             });
         }
@@ -384,27 +427,30 @@ export default class HighScoreScene extends Phaser.Scene {
     addScrollIndicator() {
         const { width, height } = this.cameras.main;
         
-        // Add text hint for mobile
+        // Add text hint for mobile - more compact
         if (this.isMobile) {
-            const hintText = this.add.text(width / 2, 170, 'Swipe to scroll', {
-                fontSize: '14px',
+            const hintY = this.isMobile ? height * 0.135 : 170;
+            const hintText = this.add.text(width / 2, hintY, '↓ Swipe ↓', {
+                fontSize: '12px',
                 fontFamily: 'Courier New, monospace',
                 color: '#888888',
                 align: 'center'
             }).setOrigin(0.5);
             
-            // Fade out after 3 seconds
+            // Fade out after 2 seconds
             this.tweens.add({
                 targets: hintText,
                 alpha: 0,
-                duration: 2000,
-                delay: 3000,
+                duration: 1500,
+                delay: 2000,
                 onComplete: () => hintText.destroy()
             });
         }
         
-        // Add scrollbar indicator (optional visual feedback)
-        this.scrollBar = this.add.rectangle(width - 15, 180 + (height - 320) / 2, 4, 60, 0x888888, 0.5);
+        // Add scrollbar indicator (optional visual feedback) - use responsive positioning
+        const scrollbarX = width - (this.isMobile ? 10 : 15);
+        const scrollbarCenterY = (this.maskStartY || 180) + (this.maskHeight || (height - 320)) / 2;
+        this.scrollBar = this.add.rectangle(scrollbarX, scrollbarCenterY, this.isMobile ? 3 : 4, 60, 0x888888, 0.5);
         this.scrollBar.setDepth(1000);
         this.updateScrollIndicator();
     }
@@ -413,12 +459,15 @@ export default class HighScoreScene extends Phaser.Scene {
         if (!this.scrollBar || this.maxScrollY <= 0) return;
         
         const { height } = this.cameras.main;
-        const scrollAreaHeight = height - 320;
-        const scrollbarHeight = Math.max(30, scrollAreaHeight * (scrollAreaHeight / (this.highScores.length * 35 + scrollAreaHeight)));
-        const scrollbarY = 180 + (scrollAreaHeight * (this.scrollY / this.maxScrollY)) + scrollbarHeight / 2;
+        const scrollAreaHeight = this.maskHeight || (height - 320);
+        const lineHeight = this.isMobile ? 26 : 35;
+        const contentHeight = this.highScores.length * lineHeight;
+        const scrollbarHeight = Math.max(20, scrollAreaHeight * (scrollAreaHeight / (contentHeight + scrollAreaHeight)));
+        const scrollbarStartY = this.maskStartY || 180;
+        const scrollbarY = scrollbarStartY + (scrollAreaHeight * (this.scrollY / this.maxScrollY)) + scrollbarHeight / 2;
         
         this.scrollBar.setY(scrollbarY);
-        this.scrollBar.setDisplaySize(4, scrollbarHeight);
+        this.scrollBar.setDisplaySize(this.isMobile ? 3 : 4, scrollbarHeight);
         
         // Update opacity based on scroll position
         if (this.scrollY > 5 || this.scrollY < this.maxScrollY - 5) {
