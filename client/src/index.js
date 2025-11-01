@@ -91,6 +91,15 @@ const game = new Phaser.Game(config);
 game.events.once('ready', () => {
     hideLoadingScreen();
     setupPhaserFullscreenEvents();
+    
+    // iOS: Apply fullscreen fix immediately when game is ready
+    // This ensures the game starts in fullscreen mode from the beginning
+    if (isiOS && isMobile) {
+        console.log('🍎 iOS: Game ready, applying initial fullscreen fix');
+        setTimeout(() => {
+            tryAndroidCSSTricks();
+        }, 100);
+    }
 });
 
 // Phaser Scale Manager event setup
@@ -377,6 +386,30 @@ const tryAndroidAlternatives = () => {
     }
 };
 
+// Force Phaser to resize to current viewport dimensions
+const forcePhaserResize = () => {
+    if (game && game.scale) {
+        // Use the actual viewport dimensions, ensuring landscape orientation
+        const currentWidth = window.innerWidth;
+        const currentHeight = window.innerHeight;
+        const landscapeWidth = Math.max(currentWidth, currentHeight);
+        const landscapeHeight = Math.min(currentWidth, currentHeight);
+        
+        // Force Phaser to update game size
+        game.scale.resize(landscapeWidth, landscapeHeight);
+        game.scale.setGameSize(landscapeWidth, landscapeHeight);
+        
+        console.log(`🎮 iOS: Force resized Phaser to ${landscapeWidth}x${landscapeHeight} (window: ${currentWidth}x${currentHeight})`);
+        
+        // Also update the canvas element directly
+        const canvas = document.querySelector('canvas');
+        if (canvas) {
+            canvas.style.width = `${landscapeWidth}px`;
+            canvas.style.height = `${landscapeHeight}px`;
+        }
+    }
+};
+
 // CSS-based fullscreen simulation for Android and iOS
 const tryAndroidCSSTricks = () => {
     const platform = isiOS ? 'iOS' : (isAndroid ? 'Android' : 'Other');
@@ -385,6 +418,91 @@ const tryAndroidCSSTricks = () => {
     // Add platform-specific CSS class for fullscreen simulation
     if (isiOS) {
         document.body.classList.add('ios-fullscreen');
+        
+        // iOS-specific: Force immediate viewport correction and Phaser resize
+        console.log('🍎 iOS: Applying immediate fullscreen fix');
+        
+        // Hide Safari UI bars immediately
+        window.scrollTo(0, 1);
+        setTimeout(() => {
+            window.scrollTo(0, 0);
+            setViewportHeight();
+        }, 100);
+        
+        // Force Phaser resize immediately and repeatedly to catch viewport changes
+        const applyiOSFullscreen = () => {
+            // Get actual viewport dimensions (accounting for Safari UI)
+            const actualWidth = window.innerWidth;
+            const actualHeight = window.innerHeight;
+            const landscapeWidth = Math.max(actualWidth, actualHeight);
+            const landscapeHeight = Math.min(actualWidth, actualHeight);
+            
+            // Update Phaser game size
+            forcePhaserResize();
+            
+            // Force canvas to full viewport
+            const canvas = document.querySelector('canvas');
+            const gameContainer = document.getElementById('game-container');
+            
+            if (canvas) {
+                canvas.style.position = 'fixed';
+                canvas.style.top = '0';
+                canvas.style.left = '0';
+                canvas.style.width = '100vw';
+                canvas.style.height = '100dvh';
+                canvas.style.height = '-webkit-fill-available';
+                canvas.style.zIndex = '100001';
+                canvas.style.margin = '0';
+                canvas.style.padding = '0';
+                canvas.style.border = 'none';
+                
+                console.log('🍎 iOS: Applied canvas fullscreen styles');
+            }
+            
+            if (gameContainer) {
+                gameContainer.style.width = '100vw';
+                gameContainer.style.height = '100dvh';
+                gameContainer.style.height = '-webkit-fill-available';
+                gameContainer.style.position = 'fixed';
+                gameContainer.style.top = '0';
+                gameContainer.style.left = '0';
+                gameContainer.style.margin = '0';
+                gameContainer.style.padding = '0';
+            }
+        };
+        
+        // Apply immediately
+        applyiOSFullscreen();
+        
+        // Apply again after a short delay to catch Safari UI changes
+        setTimeout(applyiOSFullscreen, 100);
+        setTimeout(applyiOSFullscreen, 300);
+        setTimeout(applyiOSFullscreen, 600);
+        setTimeout(applyiOSFullscreen, 1000);
+        
+        // Listen for resize events and continuously update
+        const handleiOSResize = () => {
+            setTimeout(() => {
+                applyiOSFullscreen();
+                setViewportHeight();
+            }, 100);
+        };
+        
+        // Remove old listeners if any
+        window.removeEventListener('resize', handleiOSResize);
+        window.removeEventListener('orientationchange', handleiOSResize);
+        
+        // Add resize listeners for continuous updates
+        window.addEventListener('resize', handleiOSResize, { passive: true });
+        window.addEventListener('orientationchange', handleiOSResize, { passive: true });
+        
+        // Also listen for scroll events (Safari UI can change on scroll)
+        let scrollTimeout;
+        window.addEventListener('scroll', () => {
+            clearTimeout(scrollTimeout);
+            scrollTimeout = setTimeout(applyiOSFullscreen, 150);
+        }, { passive: true });
+        
     } else {
         document.body.classList.add('android-fullscreen');
     }
@@ -470,7 +588,7 @@ const tryAndroidCSSTricks = () => {
                 }
             }, 200);
         });
-    } else {
+    } else if (!isiOS) {
         // General Android address bar hiding
         setTimeout(() => {
             window.scrollTo(0, 1);
@@ -594,12 +712,11 @@ if (isMobile) {
                 // iOS and other platforms
                 requestFullscreen();
                 
-                // For iOS, always apply additional optimizations since native fullscreen often fails
+                // For iOS, immediately apply CSS fullscreen since native fullscreen always fails
                 if (isiOS) {
-                    setTimeout(() => {
-                        console.log('iOS: Applying additional viewport optimizations');
-                        tryAndroidCSSTricks(); // Use same CSS tricks for iOS
-                    }, 800);
+                    console.log('🍎 iOS: Applying immediate CSS fullscreen (native API not available)');
+                    // Apply immediately, not after delay - iOS needs immediate correction
+                    tryAndroidCSSTricks();
                 }
             }
             
