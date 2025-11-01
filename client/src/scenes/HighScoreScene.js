@@ -27,9 +27,7 @@ export default class HighScoreScene extends Phaser.Scene {
 
         // Responsive sizing for mobile
         const titleSize = this.isMobile ? '32px' : '48px';
-        const trophySize = this.isMobile ? '20px' : '32px';
-        const titleY = this.isMobile ? height * 0.06 : 80;
-        const trophyY = this.isMobile ? height * 0.11 : 130;
+        const titleY = this.isMobile ? height * 0.04 : 60;
 
         // Dark background
         this.add.rectangle(width / 2, height / 2, width, height, 0x1a1a2e);
@@ -42,12 +40,6 @@ export default class HighScoreScene extends Phaser.Scene {
             align: 'center',
             stroke: '#000000',
             strokeThickness: this.isMobile ? 2 : 3
-        }).setOrigin(0.5);
-
-        // Trophy emoji
-        this.add.text(width / 2, trophyY, '🏆', {
-            fontSize: trophySize,
-            align: 'center'
         }).setOrigin(0.5);
 
         // Loading message
@@ -72,7 +64,7 @@ export default class HighScoreScene extends Phaser.Scene {
         }
 
         // Back button - more compact on mobile
-        const backBtnY = this.isMobile ? height - 50 : height - 80;
+        const backBtnY = this.isMobile ? height - 40 : height - 60;
         const backBtnSize = this.isMobile ? '18px' : '24px';
         const backBtn = this.add.text(width / 2, backBtnY, 'BACK TO MENU', {
             fontSize: backBtnSize,
@@ -89,16 +81,6 @@ export default class HighScoreScene extends Phaser.Scene {
 
         // Keyboard shortcut
         this.input.keyboard.on('keydown-ESC', () => this.returnToMenu());
-
-        // Instructions - hide on mobile or make smaller
-        if (!this.isMobile) {
-            this.add.text(width / 2, height - 40, 'ESC to return to main menu', {
-                fontSize: '16px',
-                fontFamily: 'Courier New, monospace',
-                color: '#888888',
-                align: 'center'
-            }).setOrigin(0.5);
-        }
 
         // Start background music
         this.startBackgroundMusic();
@@ -120,10 +102,10 @@ export default class HighScoreScene extends Phaser.Scene {
         this.scrollContainer = this.add.container(0, 0);
         this.scrollY = 0;
         
-        // Calculate responsive spacing for mobile
-        const titleAreaHeight = this.isMobile ? height * 0.15 : 180;
-        const buttonAreaHeight = this.isMobile ? height * 0.12 : 140;
-        const maskStartY = this.isMobile ? height * 0.14 : 180;
+        // Calculate responsive spacing for mobile - optimized for maximum score visibility
+        const titleAreaHeight = this.isMobile ? height * 0.10 : 120;
+        const buttonAreaHeight = this.isMobile ? height * 0.10 : 100;
+        const maskStartY = this.isMobile ? height * 0.10 : 130;
         const maskHeight = height - titleAreaHeight - buttonAreaHeight;
         
         // Create a mask to limit visible area
@@ -147,9 +129,9 @@ export default class HighScoreScene extends Phaser.Scene {
         const headerSize = this.isMobile ? '14px' : '18px';
         const scoreSize = this.isMobile ? '16px' : '20px';
         
-        // Calculate start positions responsively
-        const headerY = this.isMobile ? height * 0.13 : 170;
-        const startY = this.isMobile ? height * 0.16 : 200;
+        // Calculate start positions responsively - tighter spacing
+        const headerY = this.isMobile ? height * 0.08 : 120;
+        const startY = this.isMobile ? height * 0.11 : 150;
         
         // Clear container if recreating
         if (this.scrollContainer && this.scrollContainer.list.length > 0) {
@@ -283,7 +265,7 @@ export default class HighScoreScene extends Phaser.Scene {
         
         // Calculate max scroll based on content height
         const contentHeight = this.highScores.length * lineHeight;
-        const visibleHeight = this.maskHeight || (height - 320);
+        const visibleHeight = this.maskHeight || (height - 250);
         this.maxScrollY = Math.max(0, contentHeight - visibleHeight);
         
         // Set initial position
@@ -314,8 +296,8 @@ export default class HighScoreScene extends Phaser.Scene {
         }
 
         // Create a scrollable zone (invisible interactive area) - use calculated mask dimensions
-        const zoneCenterY = (this.maskStartY || 180) + (this.maskHeight || (height - 320)) / 2;
-        const zoneHeight = this.maskHeight || (height - 320);
+        const zoneCenterY = (this.maskStartY || 130) + (this.maskHeight || (height - 250)) / 2;
+        const zoneHeight = this.maskHeight || (height - 250);
         const scrollZone = this.add.zone(width / 2, zoneCenterY, width, zoneHeight);
         scrollZone.setInteractive({ useHandCursor: false });
         
@@ -360,7 +342,7 @@ export default class HighScoreScene extends Phaser.Scene {
                 );
                 
                 // Move container - use responsive startY
-                const startY = this.isMobile ? this.cameras.main.height * 0.16 : 200;
+                const startY = this.isMobile ? this.cameras.main.height * 0.11 : 150;
                 this.scrollContainer.setY(startY - this.scrollY);
                 this.updateScrollIndicator();
                 
@@ -390,7 +372,7 @@ export default class HighScoreScene extends Phaser.Scene {
                             0,
                             this.maxScrollY
                         );
-                        const startY = this.isMobile ? this.cameras.main.height * 0.16 : 200;
+                        const startY = this.isMobile ? this.cameras.main.height * 0.11 : 150;
                         this.scrollContainer.setY(startY - this.scrollY);
                         this.updateScrollIndicator();
                         
@@ -417,7 +399,7 @@ export default class HighScoreScene extends Phaser.Scene {
                     0,
                     this.maxScrollY
                 );
-                const startY = this.isMobile ? this.cameras.main.height * 0.16 : 200;
+                const startY = this.isMobile ? this.cameras.main.height * 0.11 : 150;
                 this.scrollContainer.setY(startY - this.scrollY);
                 this.updateScrollIndicator();
             });
@@ -429,7 +411,7 @@ export default class HighScoreScene extends Phaser.Scene {
         
         // Add text hint for mobile - more compact
         if (this.isMobile) {
-            const hintY = this.isMobile ? height * 0.135 : 170;
+            const hintY = this.isMobile ? height * 0.09 : 120;
             const hintText = this.add.text(width / 2, hintY, '↓ Swipe ↓', {
                 fontSize: '12px',
                 fontFamily: 'Courier New, monospace',
@@ -459,11 +441,11 @@ export default class HighScoreScene extends Phaser.Scene {
         if (!this.scrollBar || this.maxScrollY <= 0) return;
         
         const { height } = this.cameras.main;
-        const scrollAreaHeight = this.maskHeight || (height - 320);
+        const scrollAreaHeight = this.maskHeight || (height - 250);
         const lineHeight = this.isMobile ? 26 : 35;
         const contentHeight = this.highScores.length * lineHeight;
         const scrollbarHeight = Math.max(20, scrollAreaHeight * (scrollAreaHeight / (contentHeight + scrollAreaHeight)));
-        const scrollbarStartY = this.maskStartY || 180;
+        const scrollbarStartY = this.maskStartY || 130;
         const scrollbarY = scrollbarStartY + (scrollAreaHeight * (this.scrollY / this.maxScrollY)) + scrollbarHeight / 2;
         
         this.scrollBar.setY(scrollbarY);
