@@ -1,20 +1,20 @@
 {
   "version": 2,
   "name": "banana-pajama-zombie-shooter",
-  "buildCommand": "cd client && npm install && npm run build",
+  "buildCommand": "cd server && npm install && cd ../client && npm install && npm run build",
   "outputDirectory": "client/dist",
   "devCommand": "cd client && npm run dev",
-  "installCommand": "cd client && npm install",
+  "installCommand": "cd server && npm install && cd ../client && npm install",
   "framework": null,
   "functions": {
-    "server/index.js": {
+    "api/*.js": {
       "maxDuration": 30
     }
   },
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "/server/index.js"
+      "destination": "/api"
     },
     {
       "source": "/(.*)",
