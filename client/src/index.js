@@ -204,9 +204,7 @@ const setViewportHeight = () => {
     document.documentElement.style.setProperty('--vh', `${vh}px`);
 };
 
-// Detect Android specifically with browser details
-const isAndroid = /Android/i.test(navigator.userAgent);
-const isiOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+// Detect browser details (isiOS and isAndroid already defined above)
 const isChrome = /Chrome/i.test(navigator.userAgent);
 const isSamsung = /SamsungBrowser/i.test(navigator.userAgent);
 const isFirefox = /Firefox/i.test(navigator.userAgent);
