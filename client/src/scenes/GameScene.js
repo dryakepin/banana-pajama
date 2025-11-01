@@ -1079,45 +1079,80 @@ export default class GameScene extends Phaser.Scene {
                 console.log('🔊 User interaction detected in game, unlocking audio...');
 
                 // For iOS: Resume context first, THEN create and play audio
+                // CRITICAL: Everything must happen synchronously in this handler
                 if (isiOS) {
                     console.log('🔊 iOS detected: Resuming context and playing game audio synchronously');
 
-                    // Resume context synchronously (don't wait for promise)
-                    const resumePromise = this.sound.context.resume();
-
-                    // Create and play audio synchronously in the same event handler
-                    try {
-                        if (!this.backgroundMusic) {
-                            this.backgroundMusic = this.sound.add('zombie-game', {
-                                loop: true,
-                                volume: 0.4 // Slightly quieter during gameplay
-                            });
-                            console.log('🔊 iOS: Game audio object created');
-                        }
-
-                        // Play immediately (synchronously) - critical for iOS
-                        this.backgroundMusic.play();
-                        console.log('🔊 iOS: Game audio play() called synchronously');
-                    } catch (error) {
-                        console.error('🔊 iOS: Failed to play game audio:', error);
+                    // Step 1: Resume context (returns promise, but don't wait)
+                    let resumePromise;
+                    if (this.sound.context && this.sound.context.state === 'suspended') {
+                        resumePromise = this.sound.context.resume();
+                        console.log('🔊 iOS: Game context resume() called');
                     }
 
-                    // Log when resume completes (async)
-                    resumePromise.then(() => {
-                        console.log('🔊 iOS: Game audio context resumed successfully');
-                        console.log('🔊 Game audio context state:', this.sound.context.state);
-                        console.log('🔊 Game music playing:', this.backgroundMusic?.isPlaying);
-                    }).catch(error => {
-                        console.error('🔊 iOS: Failed to resume game audio context:', error);
-                    });
+                    // Step 2: Create and play audio SYNCHRONOUSLY in user interaction handler
+                    try {
+                        // Stop any existing music first
+                        if (this.backgroundMusic) {
+                            this.backgroundMusic.stop();
+                            this.backgroundMusic.destroy();
+                            this.backgroundMusic = null;
+                        }
+
+                        // Create new sound object synchronously
+                        this.backgroundMusic = this.sound.add('zombie-game', {
+                            loop: true,
+                            volume: 0.4 // Slightly quieter during gameplay
+                        });
+                        console.log('🔊 iOS: Game audio object created synchronously');
+
+                        // Play IMMEDIATELY (synchronously) - MUST be in user interaction handler
+                        this.backgroundMusic.play();
+                        console.log('🔊 iOS: Game audio play() called synchronously');
+                        
+                        // Verify it's actually playing
+                        setTimeout(() => {
+                            console.log('🔊 iOS: Game audio status check:', {
+                                isPlaying: this.backgroundMusic?.isPlaying,
+                                contextState: this.sound.context?.state,
+                                volume: this.backgroundMusic?.volume
+                            });
+                        }, 100);
+                    } catch (error) {
+                        console.error('🔊 iOS: Failed to play game audio:', error);
+                        console.error('🔊 iOS: Error details:', {
+                            message: error.message,
+                            stack: error.stack,
+                            contextState: this.sound.context?.state,
+                            soundSystemReady: !!this.sound
+                        });
+                    }
+
+                    // Log when resume completes (async, but audio should already be playing)
+                    if (resumePromise) {
+                        resumePromise.then(() => {
+                            console.log('🔊 iOS: Game audio context resumed successfully');
+                            console.log('🔊 iOS: Final game audio status:', {
+                                contextState: this.sound.context?.state,
+                                isPlaying: this.backgroundMusic?.isPlaying
+                            });
+                        }).catch(error => {
+                            console.error('🔊 iOS: Failed to resume game audio context:', error);
+                        });
+                    }
                 } else {
-                    // Other platforms: Resume context then play
-                    this.sound.context.resume().then(() => {
-                        console.log('🔊 Game audio context resumed, starting background music');
+                    // Other platforms
+                    if (this.sound.context) {
+                        this.sound.context.resume().then(() => {
+                            console.log('🔊 Game audio context resumed, starting background music');
+                            this.startGameMusic();
+                        }).catch(error => {
+                            console.error('🔊 Failed to resume game audio context:', error);
+                        });
+                    } else {
+                        // No WebAudio context, use HTML5 Audio
                         this.startGameMusic();
-                    }).catch(error => {
-                        console.error('🔊 Failed to resume game audio context:', error);
-                    });
+                    }
                 }
 
                 // Remove listeners after first interaction
