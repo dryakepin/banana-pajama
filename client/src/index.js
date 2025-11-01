@@ -489,6 +489,52 @@ const hideBrowserUI = () => {
     }
 };
 
+// Show install banner on mobile if not in standalone mode
+if (isMobile) {
+    // Check if already in standalone mode (PWA installed)
+    const isStandalone = window.navigator.standalone ||
+                         window.matchMedia('(display-mode: standalone)').matches;
+
+    // Check if user has dismissed the banner before
+    const bannerDismissed = localStorage.getItem('installBannerDismissed');
+
+    if (!isStandalone && !bannerDismissed) {
+        // Show install banner after a delay
+        setTimeout(() => {
+            const banner = document.getElementById('install-banner');
+            const instructions = document.getElementById('install-instructions');
+            const dismissBtn = document.getElementById('dismiss-banner');
+
+            if (banner && instructions && dismissBtn) {
+                // Set platform-specific instructions
+                if (isiOS) {
+                    instructions.textContent = 'Tap Share (⎵) → Add to Home Screen';
+                } else if (isAndroid) {
+                    instructions.textContent = 'Tap Menu (⋮) → Add to Home Screen or Install App';
+                } else {
+                    instructions.textContent = 'Add this page to your home screen for fullscreen mode';
+                }
+
+                // Show the banner
+                banner.classList.add('show');
+
+                // Dismiss button handler
+                dismissBtn.addEventListener('click', () => {
+                    banner.classList.remove('show');
+                    localStorage.setItem('installBannerDismissed', 'true');
+                });
+
+                // Auto-hide after 10 seconds
+                setTimeout(() => {
+                    if (banner.classList.contains('show')) {
+                        banner.classList.remove('show');
+                    }
+                }, 10000);
+            }
+        }, 3000); // Show after 3 seconds
+    }
+}
+
 // Handle orientation changes on mobile
 if (isMobile) {
     // Set initial viewport height

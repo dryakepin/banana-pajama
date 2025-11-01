@@ -97,25 +97,62 @@ export default class MenuScene extends Phaser.Scene {
     }
 
     initializeAudio() {
+        // Detect iOS
+        const isiOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+        // Create the audio object first (important for iOS)
+        try {
+            this.backgroundMusic = this.sound.add('zombie-theme', {
+                loop: true,
+                volume: 0.5
+            });
+            console.log('🔊 Audio object created');
+        } catch (error) {
+            console.error('🔊 Failed to create audio object:', error);
+            return;
+        }
+
         // Check if audio context needs to be unlocked
         if (this.sound.context && this.sound.context.state === 'suspended') {
             console.log('🔊 Audio context suspended, will start after user interaction');
-            
+
             // Create a one-time event listener for any user interaction
             const unlockAudio = () => {
                 console.log('🔊 User interaction detected, unlocking audio...');
-                this.sound.context.resume().then(() => {
-                    console.log('🔊 Audio context resumed, starting background music');
-                    this.startMenuMusic();
-                    
-                    // Remove listeners after first interaction
-                    this.input.off('pointerdown', unlockAudio);
-                    this.input.keyboard?.off('keydown', unlockAudio);
-                }).catch(error => {
-                    console.error('🔊 Failed to resume audio context:', error);
-                });
+
+                // For iOS: Must call play() synchronously in the event handler
+                // Resume context AND play audio synchronously
+                if (isiOS) {
+                    console.log('🔊 iOS detected: Playing audio synchronously');
+                    // Play immediately (synchronously) for iOS
+                    try {
+                        this.backgroundMusic.play();
+                        console.log('🔊 iOS: Audio play() called synchronously');
+                    } catch (error) {
+                        console.error('🔊 iOS: Failed to play audio:', error);
+                    }
+
+                    // Also resume context (can be async)
+                    this.sound.context.resume().then(() => {
+                        console.log('🔊 iOS: Audio context resumed');
+                    }).catch(error => {
+                        console.error('🔊 iOS: Failed to resume audio context:', error);
+                    });
+                } else {
+                    // Other platforms: Resume context then play
+                    this.sound.context.resume().then(() => {
+                        console.log('🔊 Audio context resumed, starting background music');
+                        this.startMenuMusic();
+                    }).catch(error => {
+                        console.error('🔊 Failed to resume audio context:', error);
+                    });
+                }
+
+                // Remove listeners after first interaction
+                this.input.off('pointerdown', unlockAudio);
+                this.input.keyboard?.off('keydown', unlockAudio);
             };
-            
+
             // Listen for any pointer or keyboard interaction
             this.input.once('pointerdown', unlockAudio);
             if (this.input.keyboard) {
@@ -127,13 +164,15 @@ export default class MenuScene extends Phaser.Scene {
             this.startMenuMusic();
         }
     }
-    
+
     startMenuMusic() {
         try {
-            this.backgroundMusic = this.sound.add('zombie-theme', {
-                loop: true,
-                volume: 0.5
-            });
+            if (!this.backgroundMusic) {
+                this.backgroundMusic = this.sound.add('zombie-theme', {
+                    loop: true,
+                    volume: 0.5
+                });
+            }
             this.backgroundMusic.play();
             console.log('🔊 Menu music started successfully');
         } catch (error) {

@@ -43,12 +43,14 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            min-height: 100vh;
-            min-height: calc(var(--vh, 1vh) * 100); /* Fallback for mobile browsers */
+            /* Use dvh (dynamic viewport height) for better mobile support */
+            min-height: 100dvh;
+            min-height: -webkit-fill-available;
             overflow: hidden;
             position: fixed;
             width: 100%;
-            height: 100%;
+            height: 100dvh;
+            height: -webkit-fill-available;
             top: 0;
             left: 0;
             /* Prevent scrolling and bouncing on mobile */
@@ -64,11 +66,19 @@
             transform: translate3d(0, 0, 0);
             -webkit-backface-visibility: hidden;
             backface-visibility: hidden;
-            /* Handle safe areas for notched devices */
-            padding-top: env(safe-area-inset-top);
-            padding-bottom: env(safe-area-inset-bottom);
+            /* Handle safe areas for notched devices - but use 0 for fullscreen */
+            padding-top: 0;
+            padding-bottom: 0;
             padding-left: env(safe-area-inset-left);
             padding-right: env(safe-area-inset-right);
+        }
+
+        /* iOS-specific fixes for fullscreen */
+        @supports (-webkit-touch-callout: none) {
+            body {
+                /* iOS Safari specific */
+                height: -webkit-fill-available;
+            }
         }
         
         #game-container {
@@ -145,18 +155,18 @@
                 #game-container {
                     display: block;
                     width: 100vw;
-                    height: 100vh;
-                    height: calc(var(--vh, 1vh) * 100); /* Mobile viewport fix */
+                    height: 100dvh;
+                    height: -webkit-fill-available;
                     position: fixed;
                     top: 0;
                     left: 0;
                     z-index: 1000;
                 }
-                
+
                 canvas {
                     width: 100vw !important;
-                    height: 100vh !important;
-                    height: calc(var(--vh, 1vh) * 100) !important; /* Mobile viewport fix */
+                    height: 100dvh !important;
+                    height: -webkit-fill-available !important;
                     position: fixed !important;
                     top: 0 !important;
                     left: 0 !important;
@@ -290,36 +300,74 @@
             top: 0 !important;
             left: 0 !important;
             width: 100vw !important;
-            height: 100vh !important;
             height: 100dvh !important;
+            height: -webkit-fill-available !important;
             z-index: 99999 !important;
             /* iOS-specific overrides */
             -webkit-overflow-scrolling: touch !important;
             -webkit-transform: translate3d(0, 0, 0) !important;
         }
-        
+
         body.ios-fullscreen #game-container {
             position: fixed !important;
             top: 0 !important;
             left: 0 !important;
             width: 100vw !important;
-            height: 100vh !important;
             height: 100dvh !important;
+            height: -webkit-fill-available !important;
             z-index: 100000 !important;
         }
-        
+
         body.ios-fullscreen canvas {
             position: fixed !important;
             top: 0 !important;
             left: 0 !important;
             width: 100vw !important;
-            height: 100vh !important;
             height: 100dvh !important;
+            height: -webkit-fill-available !important;
             z-index: 100001 !important;
             margin: 0 !important;
             padding: 0 !important;
             border: none !important;
             outline: none !important;
+        }
+
+        /* Add to home screen banner for better fullscreen experience */
+        .install-banner {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(26, 26, 46, 0.95);
+            color: white;
+            padding: 15px;
+            text-align: center;
+            font-size: 14px;
+            z-index: 200000;
+            border-top: 2px solid #ffff00;
+            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.5);
+            display: none;
+        }
+
+        .install-banner.show {
+            display: block;
+        }
+
+        .install-banner button {
+            background: #ffff00;
+            color: #1a1a2e;
+            border: none;
+            padding: 8px 15px;
+            margin: 5px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .install-banner button:hover {
+            background: #ffff44;
         }
     </style>
 </head>
@@ -332,6 +380,15 @@
             </div>
             <p>Loading...</p>
         </div>
+    </div>
+
+    <!-- Install banner for true fullscreen experience -->
+    <div id="install-banner" class="install-banner">
+        <div>
+            <strong>📱 For the best fullscreen experience:</strong><br>
+            <span id="install-instructions"></span>
+        </div>
+        <button id="dismiss-banner">Got it!</button>
     </div>
 </body>
 </html>

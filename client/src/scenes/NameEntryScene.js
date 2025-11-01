@@ -169,27 +169,96 @@ export default class NameEntryScene extends Phaser.Scene {
     }
 
     setupKeyboardInput() {
-        // Handle text input
-        this.input.keyboard.on('keydown', (event) => {
-            const key = event.key;
-            
-            if (key === 'Enter') {
+        // Detect mobile device
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+                         (('ontouchstart' in window) && (window.innerWidth <= 768 || window.innerHeight <= 768));
+
+        if (isMobile) {
+            // Create HTML input element for mobile keyboard
+            this.createMobileInput();
+        } else {
+            // Desktop keyboard handling
+            this.input.keyboard.on('keydown', (event) => {
+                const key = event.key;
+
+                if (key === 'Enter') {
+                    this.submitScore();
+                } else if (key === 'Escape') {
+                    this.skipScore();
+                } else if (key === 'Backspace') {
+                    if (this.playerName.length > 0) {
+                        this.playerName = this.playerName.slice(0, -1);
+                        this.updateNameDisplay();
+                    }
+                } else if (key.length === 1 && this.playerName.length < this.maxNameLength) {
+                    // Only allow alphanumeric characters and basic symbols
+                    if (/^[a-zA-Z0-9 \-_.]$/.test(key)) {
+                        this.playerName += key;
+                        this.updateNameDisplay();
+                    }
+                }
+            });
+        }
+    }
+
+    createMobileInput() {
+        // Create a native HTML input element for mobile keyboard
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.maxLength = this.maxNameLength;
+        input.style.position = 'fixed';
+        input.style.left = '50%';
+        input.style.top = '50%';
+        input.style.transform = 'translate(-50%, -50%)';
+        input.style.width = '80%';
+        input.style.maxWidth = '400px';
+        input.style.fontSize = '24px';
+        input.style.padding = '10px';
+        input.style.border = '2px solid #ffffff';
+        input.style.backgroundColor = '#333333';
+        input.style.color = '#ffffff';
+        input.style.fontFamily = 'Courier New, monospace';
+        input.style.textAlign = 'center';
+        input.style.zIndex = '100000';
+        input.style.borderRadius = '5px';
+        input.placeholder = 'Enter your name';
+        input.autocomplete = 'off';
+        input.autocorrect = 'off';
+        input.autocapitalize = 'off';
+        input.spellcheck = false;
+
+        // Handle input events
+        input.addEventListener('input', (e) => {
+            this.playerName = e.target.value;
+            this.updateNameDisplay();
+        });
+
+        // Handle enter key on mobile
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                input.blur();
                 this.submitScore();
-            } else if (key === 'Escape') {
-                this.skipScore();
-            } else if (key === 'Backspace') {
-                if (this.playerName.length > 0) {
-                    this.playerName = this.playerName.slice(0, -1);
-                    this.updateNameDisplay();
-                }
-            } else if (key.length === 1 && this.playerName.length < this.maxNameLength) {
-                // Only allow alphanumeric characters and basic symbols
-                if (/^[a-zA-Z0-9 \-_.]$/.test(key)) {
-                    this.playerName += key;
-                    this.updateNameDisplay();
-                }
             }
         });
+
+        // Add to DOM and focus
+        document.body.appendChild(input);
+        this.mobileInput = input;
+
+        // Focus after a small delay to ensure it works on iOS
+        setTimeout(() => {
+            input.focus();
+            // iOS Safari requires additional click to focus
+            input.click();
+        }, 100);
+    }
+
+    cleanupMobileInput() {
+        if (this.mobileInput) {
+            this.mobileInput.remove();
+            this.mobileInput = null;
+        }
     }
 
     updateNameDisplay() {
@@ -218,6 +287,9 @@ export default class NameEntryScene extends Phaser.Scene {
             this.showErrorMessage('Please enter a name!');
             return;
         }
+
+        // Cleanup mobile input if it exists
+        this.cleanupMobileInput();
 
         // Disable input during submission
         this.input.keyboard.removeAllListeners();
@@ -277,6 +349,7 @@ export default class NameEntryScene extends Phaser.Scene {
     }
 
     skipScore() {
+        this.cleanupMobileInput();
         this.proceedToMenu();
     }
 
@@ -326,6 +399,8 @@ export default class NameEntryScene extends Phaser.Scene {
         if (this.cursorTimer) {
             this.cursorTimer.destroy();
         }
+        // Clean up mobile input
+        this.cleanupMobileInput();
         super.destroy();
     }
 }

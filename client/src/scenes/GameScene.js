@@ -1063,25 +1063,63 @@ export default class GameScene extends Phaser.Scene {
     }
     
     initializeGameAudio() {
+        // Detect iOS
+        const isiOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+        // Stop any existing music from all sources
+        this.sound.stopAll();
+
+        // Create the audio object first (important for iOS)
+        try {
+            this.backgroundMusic = this.sound.add('zombie-game', {
+                loop: true,
+                volume: 0.4 // Slightly quieter during gameplay
+            });
+            console.log('🔊 Game audio object created');
+        } catch (error) {
+            console.error('🔊 Failed to create game audio object:', error);
+            return;
+        }
+
         // Check if audio context needs to be unlocked
         if (this.sound.context && this.sound.context.state === 'suspended') {
             console.log('🔊 Audio context suspended in game, will start after user interaction');
-            
+
             // Create a one-time event listener for any user interaction
             const unlockGameAudio = () => {
                 console.log('🔊 User interaction detected in game, unlocking audio...');
-                this.sound.context.resume().then(() => {
-                    console.log('🔊 Game audio context resumed, starting background music');
-                    this.startGameMusic();
-                    
-                    // Remove listeners after first interaction
-                    this.input.off('pointerdown', unlockGameAudio);
-                    this.input.keyboard?.off('keydown', unlockGameAudio);
-                }).catch(error => {
-                    console.error('🔊 Failed to resume game audio context:', error);
-                });
+
+                // For iOS: Must call play() synchronously in the event handler
+                if (isiOS) {
+                    console.log('🔊 iOS detected: Playing game audio synchronously');
+                    try {
+                        this.backgroundMusic.play();
+                        console.log('🔊 iOS: Game audio play() called synchronously');
+                    } catch (error) {
+                        console.error('🔊 iOS: Failed to play game audio:', error);
+                    }
+
+                    // Also resume context (can be async)
+                    this.sound.context.resume().then(() => {
+                        console.log('🔊 iOS: Game audio context resumed');
+                    }).catch(error => {
+                        console.error('🔊 iOS: Failed to resume game audio context:', error);
+                    });
+                } else {
+                    // Other platforms: Resume context then play
+                    this.sound.context.resume().then(() => {
+                        console.log('🔊 Game audio context resumed, starting background music');
+                        this.startGameMusic();
+                    }).catch(error => {
+                        console.error('🔊 Failed to resume game audio context:', error);
+                    });
+                }
+
+                // Remove listeners after first interaction
+                this.input.off('pointerdown', unlockGameAudio);
+                this.input.keyboard?.off('keydown', unlockGameAudio);
             };
-            
+
             // Listen for any pointer or keyboard interaction
             this.input.once('pointerdown', unlockGameAudio);
             if (this.input.keyboard) {
@@ -1093,16 +1131,18 @@ export default class GameScene extends Phaser.Scene {
             this.startGameMusic();
         }
     }
-    
+
     startGameMusic() {
-        // Stop any existing music from all sources
-        this.sound.stopAll();
-        
         try {
-            this.backgroundMusic = this.sound.add('zombie-game', {
-                loop: true,
-                volume: 0.4 // Slightly quieter during gameplay
-            });
+            if (!this.backgroundMusic) {
+                // Stop any existing music from all sources
+                this.sound.stopAll();
+
+                this.backgroundMusic = this.sound.add('zombie-game', {
+                    loop: true,
+                    volume: 0.4 // Slightly quieter during gameplay
+                });
+            }
             this.backgroundMusic.play();
             console.log('🔊 Game music started successfully');
         } catch (error) {
