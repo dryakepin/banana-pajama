@@ -66,3 +66,6 @@ Thumbs.db
 # Local development
 .cache/
 .parcel-cache/
+
+# Claude Code local settings
+.claude/settings.local.json
