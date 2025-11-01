@@ -709,18 +709,31 @@ if (isMobile) {
             // For iOS: Also try to unlock audio by creating a dummy sound
             // This must happen synchronously in the user interaction handler
             if (isiOS && game && game.sound) {
+                console.log('🔊 iOS: Attempting to unlock audio system...', {
+                    soundSystemReady: !!game.sound,
+                    contextExists: !!game.sound.context,
+                    contextState: game.sound.context?.state,
+                    scenesReady: game.scene?.scenes?.length > 0
+                });
+                
                 try {
                     // Try to create and play a very short silent sound to unlock audio
                     // This must be done synchronously in the click/touch handler
-                    const testSound = game.sound.add('zombie-theme', { volume: 0.01 });
-                    testSound.play({ seek: 0, duration: 0.1 });
-                    setTimeout(() => {
-                        testSound.stop();
-                        testSound.destroy();
-                    }, 100);
-                    console.log('🔊 iOS: Test sound played to unlock audio system');
+                    // Note: Sound may not be loaded yet, but we'll try anyway
+                    if (game.cache && game.cache.audio && game.cache.audio.exists('zombie-theme')) {
+                        const testSound = game.sound.add('zombie-theme', { volume: 0.01 });
+                        testSound.play();
+                        setTimeout(() => {
+                            testSound.stop();
+                            testSound.destroy();
+                        }, 100);
+                        console.log('🔊 iOS: Test sound played to unlock audio system');
+                    } else {
+                        console.log('🔊 iOS: Audio not loaded yet, will unlock when scene plays audio');
+                    }
                 } catch (err) {
                     console.log('🔊 iOS: Test sound failed (may need scene to be ready):', err.message);
+                    console.log('🔊 iOS: Full error:', err);
                 }
             }
             

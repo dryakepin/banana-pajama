@@ -108,6 +108,13 @@ export default class MenuScene extends Phaser.Scene {
             // Create a one-time event listener for any user interaction
             const unlockAudio = () => {
                 console.log('🔊 User interaction detected, unlocking audio...');
+                console.log('🔊 Audio system status:', {
+                    soundSystemReady: !!this.sound,
+                    contextExists: !!this.sound?.context,
+                    contextState: this.sound?.context?.state,
+                    audioCache: this.cache?.audio?.exists('zombie-theme'),
+                    isiOS
+                });
 
                 // For iOS: Resume context first, THEN create and play audio
                 // CRITICAL: Everything must happen synchronously in this handler
@@ -119,37 +126,79 @@ export default class MenuScene extends Phaser.Scene {
                     if (this.sound.context && this.sound.context.state === 'suspended') {
                         resumePromise = this.sound.context.resume();
                         console.log('🔊 iOS: Context resume() called');
+                    } else if (this.sound.context) {
+                        console.log('🔊 iOS: Context already active, state:', this.sound.context.state);
+                    } else {
+                        console.log('🔊 iOS: No WebAudio context, will use HTML5 Audio');
                     }
 
                     // Step 2: Create and play audio SYNCHRONOUSLY in user interaction handler
                     // This is CRITICAL - iOS only allows audio playback if initiated
                     // synchronously within a user interaction event handler
                     try {
+                        // Check if audio is loaded
+                        const audioLoaded = this.cache.audio.exists('zombie-theme');
+                        console.log('🔊 iOS: Audio loaded check:', audioLoaded);
+                        
+                        if (!audioLoaded) {
+                            console.error('🔊 iOS: Audio file not loaded! Cannot play.');
+                            console.log('🔊 iOS: Available audio files:', this.cache.audio.getKeys());
+                            return; // Can't play if not loaded
+                        }
+                        
                         // Stop any existing music first
                         if (this.backgroundMusic) {
                             this.backgroundMusic.stop();
                             this.backgroundMusic.destroy();
                             this.backgroundMusic = null;
+                            console.log('🔊 iOS: Stopped existing music');
                         }
 
                         // Create new sound object synchronously
+                        console.log('🔊 iOS: Creating audio object...');
                         this.backgroundMusic = this.sound.add('zombie-theme', {
                             loop: true,
                             volume: 0.5
                         });
-                        console.log('🔊 iOS: Audio object created synchronously');
+                        console.log('🔊 iOS: Audio object created synchronously', {
+                            soundExists: !!this.backgroundMusic,
+                            soundType: this.backgroundMusic?.constructor?.name
+                        });
 
                         // Play IMMEDIATELY (synchronously) - MUST be in user interaction handler
-                        this.backgroundMusic.play();
-                        console.log('🔊 iOS: Audio play() called synchronously');
+                        const playResult = this.backgroundMusic.play();
+                        console.log('🔊 iOS: Audio play() called synchronously', {
+                            returnedValue: playResult,
+                            isPlayingImmediate: this.backgroundMusic?.isPlaying
+                        });
                         
                         // Verify it's actually playing
                         setTimeout(() => {
-                            console.log('🔊 iOS: Audio status check:', {
+                            console.log('🔊 iOS: Audio status check (after 100ms):', {
                                 isPlaying: this.backgroundMusic?.isPlaying,
+                                isPaused: this.backgroundMusic?.isPaused,
                                 contextState: this.sound.context?.state,
-                                volume: this.backgroundMusic?.volume
+                                volume: this.backgroundMusic?.volume,
+                                soundExists: !!this.backgroundMusic
                             });
+                            
+                            // If not playing, try one more time
+                            if (!this.backgroundMusic?.isPlaying) {
+                                console.log('🔊 iOS: Audio not playing, attempting to resume...');
+                                try {
+                                    if (this.sound.context && this.sound.context.state === 'suspended') {
+                                        this.sound.context.resume().then(() => {
+                                            this.backgroundMusic.play();
+                                            console.log('🔊 iOS: Retry play after context resume');
+                                        });
+                                    } else {
+                                        this.backgroundMusic.play();
+                                        console.log('🔊 iOS: Retry play without resume');
+                                    }
+                                } catch (retryErr) {
+                                    console.error('🔊 iOS: Retry play failed:', retryErr);
+                                }
+                            }
                         }, 100);
                     } catch (error) {
                         console.error('🔊 iOS: Failed to play audio:', error);
@@ -157,7 +206,8 @@ export default class MenuScene extends Phaser.Scene {
                             message: error.message,
                             stack: error.stack,
                             contextState: this.sound.context?.state,
-                            soundSystemReady: !!this.sound
+                            soundSystemReady: !!this.sound,
+                            audioLoaded: this.cache?.audio?.exists('zombie-theme')
                         });
                     }
 
