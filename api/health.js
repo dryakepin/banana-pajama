@@ -15,10 +15,12 @@ function getPool() {
 
     return new Pool({
         connectionString,
-        ssl: { rejectUnauthorized: false },
+        ssl: {
+            rejectUnauthorized: false,
+        },
         max: 1, // Serverless functions should use minimal connections
         idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 2000,
+        connectionTimeoutMillis: 5000,
     });
 }
 

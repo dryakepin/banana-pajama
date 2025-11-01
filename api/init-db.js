@@ -15,10 +15,13 @@ function getPool() {
 
     return new Pool({
         connectionString,
-        ssl: { rejectUnauthorized: false },
+        ssl: {
+            rejectUnauthorized: false,
+            // Supabase requires SSL but with custom certificate handling
+        },
         max: 1,
         idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 2000,
+        connectionTimeoutMillis: 5000,
     });
 }
 
