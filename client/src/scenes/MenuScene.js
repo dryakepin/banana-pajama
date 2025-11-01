@@ -99,18 +99,7 @@ export default class MenuScene extends Phaser.Scene {
     initializeAudio() {
         // Detect iOS
         const isiOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-
-        // Create the audio object first (important for iOS)
-        try {
-            this.backgroundMusic = this.sound.add('zombie-theme', {
-                loop: true,
-                volume: 0.5
-            });
-            console.log('🔊 Audio object created');
-        } catch (error) {
-            console.error('🔊 Failed to create audio object:', error);
-            return;
-        }
+        console.log('🔊 Initializing audio...', { isiOS, contextState: this.sound.context?.state });
 
         // Check if audio context needs to be unlocked
         if (this.sound.context && this.sound.context.state === 'suspended') {
@@ -120,21 +109,35 @@ export default class MenuScene extends Phaser.Scene {
             const unlockAudio = () => {
                 console.log('🔊 User interaction detected, unlocking audio...');
 
-                // For iOS: Must call play() synchronously in the event handler
-                // Resume context AND play audio synchronously
+                // For iOS: Resume context first, THEN create and play audio
                 if (isiOS) {
-                    console.log('🔊 iOS detected: Playing audio synchronously');
-                    // Play immediately (synchronously) for iOS
+                    console.log('🔊 iOS detected: Resuming context and playing synchronously');
+
+                    // Resume context synchronously (don't wait for promise)
+                    const resumePromise = this.sound.context.resume();
+
+                    // Create and play audio synchronously in the same event handler
                     try {
+                        if (!this.backgroundMusic) {
+                            this.backgroundMusic = this.sound.add('zombie-theme', {
+                                loop: true,
+                                volume: 0.5
+                            });
+                            console.log('🔊 iOS: Audio object created');
+                        }
+
+                        // Play immediately (synchronously) - critical for iOS
                         this.backgroundMusic.play();
                         console.log('🔊 iOS: Audio play() called synchronously');
                     } catch (error) {
                         console.error('🔊 iOS: Failed to play audio:', error);
                     }
 
-                    // Also resume context (can be async)
-                    this.sound.context.resume().then(() => {
-                        console.log('🔊 iOS: Audio context resumed');
+                    // Log when resume completes (async)
+                    resumePromise.then(() => {
+                        console.log('🔊 iOS: Audio context resumed successfully');
+                        console.log('🔊 Audio context state:', this.sound.context.state);
+                        console.log('🔊 Music playing:', this.backgroundMusic?.isPlaying);
                     }).catch(error => {
                         console.error('🔊 iOS: Failed to resume audio context:', error);
                     });

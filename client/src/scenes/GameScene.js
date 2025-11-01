@@ -1065,21 +1065,10 @@ export default class GameScene extends Phaser.Scene {
     initializeGameAudio() {
         // Detect iOS
         const isiOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+        console.log('🔊 Initializing game audio...', { isiOS, contextState: this.sound.context?.state });
 
         // Stop any existing music from all sources
         this.sound.stopAll();
-
-        // Create the audio object first (important for iOS)
-        try {
-            this.backgroundMusic = this.sound.add('zombie-game', {
-                loop: true,
-                volume: 0.4 // Slightly quieter during gameplay
-            });
-            console.log('🔊 Game audio object created');
-        } catch (error) {
-            console.error('🔊 Failed to create game audio object:', error);
-            return;
-        }
 
         // Check if audio context needs to be unlocked
         if (this.sound.context && this.sound.context.state === 'suspended') {
@@ -1089,19 +1078,35 @@ export default class GameScene extends Phaser.Scene {
             const unlockGameAudio = () => {
                 console.log('🔊 User interaction detected in game, unlocking audio...');
 
-                // For iOS: Must call play() synchronously in the event handler
+                // For iOS: Resume context first, THEN create and play audio
                 if (isiOS) {
-                    console.log('🔊 iOS detected: Playing game audio synchronously');
+                    console.log('🔊 iOS detected: Resuming context and playing game audio synchronously');
+
+                    // Resume context synchronously (don't wait for promise)
+                    const resumePromise = this.sound.context.resume();
+
+                    // Create and play audio synchronously in the same event handler
                     try {
+                        if (!this.backgroundMusic) {
+                            this.backgroundMusic = this.sound.add('zombie-game', {
+                                loop: true,
+                                volume: 0.4 // Slightly quieter during gameplay
+                            });
+                            console.log('🔊 iOS: Game audio object created');
+                        }
+
+                        // Play immediately (synchronously) - critical for iOS
                         this.backgroundMusic.play();
                         console.log('🔊 iOS: Game audio play() called synchronously');
                     } catch (error) {
                         console.error('🔊 iOS: Failed to play game audio:', error);
                     }
 
-                    // Also resume context (can be async)
-                    this.sound.context.resume().then(() => {
-                        console.log('🔊 iOS: Game audio context resumed');
+                    // Log when resume completes (async)
+                    resumePromise.then(() => {
+                        console.log('🔊 iOS: Game audio context resumed successfully');
+                        console.log('🔊 Game audio context state:', this.sound.context.state);
+                        console.log('🔊 Game music playing:', this.backgroundMusic?.isPlaying);
                     }).catch(error => {
                         console.error('🔊 iOS: Failed to resume game audio context:', error);
                     });
