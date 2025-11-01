@@ -1,0 +1,9 @@
+{
+  "name": "banana-pajama-api",
+  "version": "1.0.0",
+  "description": "Serverless API functions for Banana Pajama Zombie Shooter",
+  "private": true,
+  "dependencies": {
+    "pg": "^8.11.1"
+  }
+}

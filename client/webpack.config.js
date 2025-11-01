@@ -42,7 +42,15 @@ module.exports = {
   devServer: {
     static: './dist',
     hot: true,
-    port: 3000,
+    port: 8080,
+    // Proxy API requests to local Express server during development
+    proxy: [
+      {
+        context: ['/api'],
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      }
+    ],
   },
   resolve: {
     extensions: ['.js'],
