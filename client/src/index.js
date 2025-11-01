@@ -49,7 +49,10 @@ const config = {
         smoothFactor: 0.2
     },
     audio: {
-        disableWebAudio: false
+        disableWebAudio: false,
+        // iOS Safari has issues with WebAudio - use HTML5 Audio as fallback
+        // Phaser will automatically fall back to HTML5 Audio if WebAudio fails
+        noAudio: false
     },
     dom: {
         createContainer: true
@@ -72,15 +75,50 @@ const hideLoadingScreen = () => {
 
 // Unlock audio context on first user interaction
 const unlockAudioContext = () => {
-    if (game && game.sound && game.sound.context && game.sound.context.state === 'suspended') {
-        console.log('🔊 Audio context suspended, resuming after user interaction...');
-        game.sound.context.resume().then(() => {
-            console.log('🔊 Audio context unlocked successfully');
-        }).catch(error => {
-            console.error('🔊 Failed to resume audio context:', error);
-        });
+    if (!game || !game.sound) {
+        console.log('🔊 Game or sound system not ready');
+        return;
+    }
+    
+    // Try to unlock WebAudio context if it exists
+    if (game.sound.context) {
+        if (game.sound.context.state === 'suspended') {
+            console.log('🔊 Audio context suspended, resuming...');
+            const resumePromise = game.sound.context.resume();
+            
+            // For iOS: Also try to start a dummy sound to unlock
+            if (isiOS) {
+                // iOS requires synchronous play in user interaction handler
+                // Create a silent audio element to unlock
+                try {
+                    const audio = new Audio();
+                    audio.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
+                    audio.volume = 0.01;
+                    const playPromise = audio.play();
+                    if (playPromise) {
+                        playPromise.then(() => {
+                            console.log('🔊 iOS: Dummy audio played to unlock audio');
+                            audio.pause();
+                            audio.remove();
+                        }).catch(err => {
+                            console.log('🔊 iOS: Dummy audio play failed (expected):', err.message);
+                        });
+                    }
+                } catch (err) {
+                    console.log('🔊 iOS: Could not create dummy audio:', err.message);
+                }
+            }
+            
+            resumePromise.then(() => {
+                console.log('🔊 Audio context unlocked successfully');
+            }).catch(error => {
+                console.error('🔊 Failed to resume audio context:', error);
+            });
+        } else {
+            console.log('🔊 Audio context already unlocked, state:', game.sound.context.state);
+        }
     } else {
-        console.log('🔊 Audio context already unlocked or unavailable');
+        console.log('🔊 No WebAudio context (using HTML5 Audio fallback)');
     }
 };
 
@@ -664,8 +702,27 @@ if (isMobile) {
         if (!fullscreenRequested) {
             fullscreenRequested = true;
             
-            // Unlock audio context on first user interaction
+            // Unlock audio context on first user interaction - CRITICAL for iOS
+            // Must be called synchronously in user interaction handler
             unlockAudioContext();
+            
+            // For iOS: Also try to unlock audio by creating a dummy sound
+            // This must happen synchronously in the user interaction handler
+            if (isiOS && game && game.sound) {
+                try {
+                    // Try to create and play a very short silent sound to unlock audio
+                    // This must be done synchronously in the click/touch handler
+                    const testSound = game.sound.add('zombie-theme', { volume: 0.01 });
+                    testSound.play({ seek: 0, duration: 0.1 });
+                    setTimeout(() => {
+                        testSound.stop();
+                        testSound.destroy();
+                    }, 100);
+                    console.log('🔊 iOS: Test sound played to unlock audio system');
+                } catch (err) {
+                    console.log('🔊 iOS: Test sound failed (may need scene to be ready):', err.message);
+                }
+            }
             
             if (isAndroid) {
                 console.log('Android: Requesting fullscreen with Phaser + fallbacks');

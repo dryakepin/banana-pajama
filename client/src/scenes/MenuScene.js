@@ -110,45 +110,82 @@ export default class MenuScene extends Phaser.Scene {
                 console.log('🔊 User interaction detected, unlocking audio...');
 
                 // For iOS: Resume context first, THEN create and play audio
+                // CRITICAL: Everything must happen synchronously in this handler
                 if (isiOS) {
                     console.log('🔊 iOS detected: Resuming context and playing synchronously');
 
-                    // Resume context synchronously (don't wait for promise)
-                    const resumePromise = this.sound.context.resume();
-
-                    // Create and play audio synchronously in the same event handler
-                    try {
-                        if (!this.backgroundMusic) {
-                            this.backgroundMusic = this.sound.add('zombie-theme', {
-                                loop: true,
-                                volume: 0.5
-                            });
-                            console.log('🔊 iOS: Audio object created');
-                        }
-
-                        // Play immediately (synchronously) - critical for iOS
-                        this.backgroundMusic.play();
-                        console.log('🔊 iOS: Audio play() called synchronously');
-                    } catch (error) {
-                        console.error('🔊 iOS: Failed to play audio:', error);
+                    // Step 1: Resume context (returns promise, but don't wait)
+                    let resumePromise;
+                    if (this.sound.context && this.sound.context.state === 'suspended') {
+                        resumePromise = this.sound.context.resume();
+                        console.log('🔊 iOS: Context resume() called');
                     }
 
-                    // Log when resume completes (async)
-                    resumePromise.then(() => {
-                        console.log('🔊 iOS: Audio context resumed successfully');
-                        console.log('🔊 Audio context state:', this.sound.context.state);
-                        console.log('🔊 Music playing:', this.backgroundMusic?.isPlaying);
-                    }).catch(error => {
-                        console.error('🔊 iOS: Failed to resume audio context:', error);
-                    });
+                    // Step 2: Create and play audio SYNCHRONOUSLY in user interaction handler
+                    // This is CRITICAL - iOS only allows audio playback if initiated
+                    // synchronously within a user interaction event handler
+                    try {
+                        // Stop any existing music first
+                        if (this.backgroundMusic) {
+                            this.backgroundMusic.stop();
+                            this.backgroundMusic.destroy();
+                            this.backgroundMusic = null;
+                        }
+
+                        // Create new sound object synchronously
+                        this.backgroundMusic = this.sound.add('zombie-theme', {
+                            loop: true,
+                            volume: 0.5
+                        });
+                        console.log('🔊 iOS: Audio object created synchronously');
+
+                        // Play IMMEDIATELY (synchronously) - MUST be in user interaction handler
+                        this.backgroundMusic.play();
+                        console.log('🔊 iOS: Audio play() called synchronously');
+                        
+                        // Verify it's actually playing
+                        setTimeout(() => {
+                            console.log('🔊 iOS: Audio status check:', {
+                                isPlaying: this.backgroundMusic?.isPlaying,
+                                contextState: this.sound.context?.state,
+                                volume: this.backgroundMusic?.volume
+                            });
+                        }, 100);
+                    } catch (error) {
+                        console.error('🔊 iOS: Failed to play audio:', error);
+                        console.error('🔊 iOS: Error details:', {
+                            message: error.message,
+                            stack: error.stack,
+                            contextState: this.sound.context?.state,
+                            soundSystemReady: !!this.sound
+                        });
+                    }
+
+                    // Log when resume completes (async, but audio should already be playing)
+                    if (resumePromise) {
+                        resumePromise.then(() => {
+                            console.log('🔊 iOS: Audio context resumed successfully');
+                            console.log('🔊 iOS: Final audio status:', {
+                                contextState: this.sound.context?.state,
+                                isPlaying: this.backgroundMusic?.isPlaying
+                            });
+                        }).catch(error => {
+                            console.error('🔊 iOS: Failed to resume audio context:', error);
+                        });
+                    }
                 } else {
                     // Other platforms: Resume context then play
-                    this.sound.context.resume().then(() => {
-                        console.log('🔊 Audio context resumed, starting background music');
+                    if (this.sound.context) {
+                        this.sound.context.resume().then(() => {
+                            console.log('🔊 Audio context resumed, starting background music');
+                            this.startMenuMusic();
+                        }).catch(error => {
+                            console.error('🔊 Failed to resume audio context:', error);
+                        });
+                    } else {
+                        // No WebAudio context, use HTML5 Audio
                         this.startMenuMusic();
-                    }).catch(error => {
-                        console.error('🔊 Failed to resume audio context:', error);
-                    });
+                    }
                 }
 
                 // Remove listeners after first interaction
