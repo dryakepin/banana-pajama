@@ -202,9 +202,18 @@ export default class NameEntryScene extends Phaser.Scene {
     }
 
     createMobileInput() {
+        // Disable Phaser keyboard input to prevent conflicts
+        if (this.input.keyboard) {
+            this.input.keyboard.enabled = false;
+        }
+
+        // Hide the Phaser name text since we'll use the native input
+        this.nameText.setVisible(false);
+
         // Create a native HTML input element for mobile keyboard
         const input = document.createElement('input');
         input.type = 'text';
+        input.inputMode = 'text'; // Explicitly set input mode for mobile keyboards
         input.maxLength = this.maxNameLength;
         input.style.position = 'fixed';
         input.style.left = '50%';
@@ -221,25 +230,50 @@ export default class NameEntryScene extends Phaser.Scene {
         input.style.textAlign = 'center';
         input.style.zIndex = '100000';
         input.style.borderRadius = '5px';
+        input.style.outline = 'none';
         input.placeholder = 'Enter your name';
         input.autocomplete = 'off';
         input.autocorrect = 'off';
         input.autocapitalize = 'off';
         input.spellcheck = false;
+        input.value = this.playerName || '';
 
-        // Handle input events
-        input.addEventListener('input', (e) => {
-            this.playerName = e.target.value;
-            this.updateNameDisplay();
-        });
-
-        // Handle enter key on mobile
+        // Prevent any event bubbling that might interfere
         input.addEventListener('keydown', (e) => {
+            e.stopPropagation(); // Prevent Phaser from receiving keyboard events
+
             if (e.key === 'Enter') {
                 e.preventDefault();
                 input.blur();
                 this.submitScore();
             }
+        }, true); // Use capture phase
+
+        input.addEventListener('keyup', (e) => {
+            e.stopPropagation(); // Prevent Phaser from receiving keyboard events
+        }, true);
+
+        input.addEventListener('keypress', (e) => {
+            e.stopPropagation(); // Prevent Phaser from receiving keyboard events
+        }, true);
+
+        // Handle input events - multiple events for better compatibility
+        input.addEventListener('input', (e) => {
+            this.playerName = e.target.value;
+            this.characterCountText.setText(`${this.playerName.length}/${this.maxNameLength}`);
+
+            // Update character count color
+            if (this.playerName.length >= this.maxNameLength) {
+                this.characterCountText.setColor('#ff6666');
+            } else {
+                this.characterCountText.setColor('#888888');
+            }
+        });
+
+        // Also handle change event as fallback
+        input.addEventListener('change', (e) => {
+            this.playerName = e.target.value;
+            this.characterCountText.setText(`${this.playerName.length}/${this.maxNameLength}`);
         });
 
         // Add to DOM and focus
@@ -258,6 +292,16 @@ export default class NameEntryScene extends Phaser.Scene {
         if (this.mobileInput) {
             this.mobileInput.remove();
             this.mobileInput = null;
+        }
+
+        // Re-enable Phaser keyboard input
+        if (this.input.keyboard) {
+            this.input.keyboard.enabled = true;
+        }
+
+        // Show the Phaser name text again (in case we return to this scene)
+        if (this.nameText) {
+            this.nameText.setVisible(true);
         }
     }
 
