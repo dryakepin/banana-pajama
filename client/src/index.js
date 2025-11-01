@@ -11,6 +11,10 @@ import NameEntryScene from './scenes/NameEntryScene.js';
 const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
                  (('ontouchstart' in window) && (window.innerWidth <= 768 || window.innerHeight <= 768));
 
+// Detect iOS specifically (needed for audio config)
+const isiOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+const isAndroid = /Android/i.test(navigator.userAgent);
+
 // Game configuration optimized for landscape mobile
 const config = {
     type: Phaser.AUTO,
