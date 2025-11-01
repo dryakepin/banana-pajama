@@ -49,9 +49,9 @@ const config = {
         smoothFactor: 0.2
     },
     audio: {
-        disableWebAudio: false,
-        // iOS Safari has issues with WebAudio - use HTML5 Audio as fallback
-        // Phaser will automatically fall back to HTML5 Audio if WebAudio fails
+        // CRITICAL: Disable WebAudio on iOS - it has major issues
+        // Force HTML5 Audio which is more reliable on iOS Safari
+        disableWebAudio: isiOS || false,
         noAudio: false
     },
     dom: {

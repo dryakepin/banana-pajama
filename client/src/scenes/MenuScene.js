@@ -166,11 +166,31 @@ export default class MenuScene extends Phaser.Scene {
                         });
 
                         // Play IMMEDIATELY (synchronously) - MUST be in user interaction handler
-                        const playResult = this.backgroundMusic.play();
-                        console.log('🔊 iOS: Audio play() called synchronously', {
-                            returnedValue: playResult,
-                            isPlayingImmediate: this.backgroundMusic?.isPlaying
-                        });
+                        // iOS requires this to be called directly, not via promise
+                        try {
+                            const playResult = this.backgroundMusic.play();
+                            
+                            // Handle promise-based play() if it returns a promise
+                            if (playResult && typeof playResult.then === 'function') {
+                                playResult.then(() => {
+                                    console.log('🔊 iOS: Audio play promise resolved');
+                                }).catch((playError) => {
+                                    console.error('🔊 iOS: Audio play promise rejected:', playError);
+                                    // Try alternative method
+                                    this.tryAlternativeAudioPlay();
+                                });
+                            }
+                            
+                            console.log('🔊 iOS: Audio play() called synchronously', {
+                                returnedValue: playResult,
+                                hasPromise: playResult && typeof playResult.then === 'function',
+                                isPlayingImmediate: this.backgroundMusic?.isPlaying
+                            });
+                        } catch (playError) {
+                            console.error('🔊 iOS: play() threw exception:', playError);
+                            // Try alternative method
+                            this.tryAlternativeAudioPlay();
+                        }
                         
                         // Verify it's actually playing
                         setTimeout(() => {
@@ -263,10 +283,44 @@ export default class MenuScene extends Phaser.Scene {
                     volume: 0.5
                 });
             }
-            this.backgroundMusic.play();
+            const playResult = this.backgroundMusic.play();
+            if (playResult && typeof playResult.then === 'function') {
+                playResult.catch((err) => {
+                    console.error('🔊 Menu music play promise rejected:', err);
+                });
+            }
             console.log('🔊 Menu music started successfully');
         } catch (error) {
             console.error('🔊 Failed to start menu music:', error);
+        }
+    }
+    
+    // Alternative audio playback method for iOS when Phaser fails
+    tryAlternativeAudioPlay() {
+        console.log('🔊 iOS: Trying alternative HTML5 Audio method...');
+        try {
+            // Create HTML5 Audio element directly
+            const audio = new Audio();
+            audio.src = 'assets/zombie-theme.mp3';
+            audio.loop = true;
+            audio.volume = 0.5;
+            
+            // Play immediately in user interaction handler
+            const playPromise = audio.play();
+            if (playPromise) {
+                playPromise.then(() => {
+                    console.log('🔊 iOS: HTML5 Audio playing successfully');
+                    // Store reference so we can stop it later
+                    this.html5Audio = audio;
+                }).catch((err) => {
+                    console.error('🔊 iOS: HTML5 Audio play failed:', err);
+                });
+            } else {
+                console.log('🔊 iOS: HTML5 Audio play() returned no promise');
+                this.html5Audio = audio;
+            }
+        } catch (err) {
+            console.error('🔊 iOS: HTML5 Audio creation failed:', err);
         }
     }
 
