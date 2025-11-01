@@ -90,6 +90,13 @@ export default class MenuScene extends Phaser.Scene {
         // Stop any existing music
         if (this.backgroundMusic) {
             this.backgroundMusic.stop();
+            this.backgroundMusic = null;
+        }
+        
+        // Stop HTML5 Audio if it exists
+        if (this.html5Audio) {
+            this.html5Audio.pause();
+            this.html5Audio = null;
         }
         
         // Initialize audio - will start after user interaction
