@@ -16,14 +16,17 @@ function getPool() {
         throw new Error('Database connection string not found. Please set DATABASE_URL, POSTGRES_URL, or POSTGRES_PRISMA_URL environment variable');
     }
 
+    // Ensure the connection string uses postgresql:// protocol
+    const normalizedConnectionString = connectionString.replace(/^postgres:\/\//, 'postgresql://');
+
     return new Pool({
-        connectionString,
+        connectionString: normalizedConnectionString,
         ssl: {
             rejectUnauthorized: false,
         },
         max: 1,
         idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 5000,
+        connectionTimeoutMillis: 10000,
     });
 }
 
