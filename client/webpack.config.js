@@ -2,13 +2,14 @@ const path = require('path');
 const webpack = require('webpack');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
+const TerserPlugin = require('terser-webpack-plugin');
 const pkg = require('./package.json');
 
 module.exports = {
   entry: './src/index.js',
   output: {
     path: path.resolve(__dirname, 'dist'),
-    filename: 'bundle.js',
+    filename: '[name].[contenthash:8].js',
     clean: true,
   },
   module: {
@@ -21,6 +22,32 @@ module.exports = {
         test: /\.(png|svg|jpg|jpeg|gif|ogg|mp3|wav)$/i,
         type: 'asset/resource',
       },
+    ],
+  },
+  optimization: {
+    splitChunks: {
+      cacheGroups: {
+        phaser: {
+          test: /[\\/]node_modules[\\/]phaser[\\/]/,
+          name: 'vendor-phaser',
+          chunks: 'all',
+          priority: 10,
+        },
+      },
+    },
+    minimizer: [
+      new TerserPlugin({
+        terserOptions: {
+          compress: {
+            drop_console: true,
+            passes: 2,
+          },
+          format: {
+            comments: false,
+          },
+        },
+        extractComments: false,
+      }),
     ],
   },
   plugins: [
@@ -62,6 +89,8 @@ module.exports = {
     extensions: ['.js'],
   },
   performance: {
-    hints: false,
+    hints: 'warning',
+    maxAssetSize: 512000,
+    maxEntrypointSize: 512000,
   },
 };

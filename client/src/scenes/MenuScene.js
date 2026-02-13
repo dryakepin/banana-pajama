@@ -10,7 +10,7 @@ export default class MenuScene extends Phaser.Scene {
     }
 
     preload() {
-        this.load.image('loading_screen', 'assets/loading_screen.png');
+        this.load.image('loading_screen', 'assets/loading_screen.jpg');
         this.load.audio('zombie-theme', 'assets/zombie-theme.mp3');
     }
 
