@@ -34,6 +34,10 @@ export default class BasicZombie extends Phaser.Physics.Arcade.Sprite {
         this.isDead = false;
         this.lastPathfindTime = 0;
         this.pathfindCooldown = 200; // Recalculate movement every 200ms
+
+        // Walk animation state
+        this._walkTimer = 0;
+        this._baseScale = 0.1;
     }
     
     preUpdate(time, delta) {
@@ -84,24 +88,31 @@ export default class BasicZombie extends Phaser.Physics.Arcade.Sprite {
             
             this.setVelocity(velocityX, velocityY);
             
+            // Advance walk animation timer
+            this._walkTimer += this.scene.game.loop.delta;
+
             // Handle sprite rotation and flipping based on movement direction
             if (velocityX !== 0 || velocityY !== 0) {
                 const angle = Math.atan2(velocityY, velocityX);
-                
+                const wobble = Math.sin(this._walkTimer * 0.004) * 0.15;
+
                 // Flip sprite vertically when moving left and adjust rotation
                 if (velocityX < 0) {
-                    // Moving left - flip vertically to face left
                     this.setFlipY(true);
-                    this.setRotation(angle);
+                    this.setRotation(angle + wobble);
                 } else {
-                    // Moving right - normal orientation
                     this.setFlipY(false);
-                    this.setRotation(angle);
+                    this.setRotation(angle + wobble);
                 }
             }
+
+            // Scale bob while moving
+            const bob = Math.sin(this._walkTimer * 0.005) * 0.008;
+            this.setScale(this._baseScale + bob);
         } else {
             // Stop moving when in attack range
             this.setVelocity(0, 0);
+            this.setScale(this._baseScale);
         }
     }
     
@@ -241,6 +252,7 @@ export default class BasicZombie extends Phaser.Physics.Arcade.Sprite {
         // Death animation/effect
         this.setTint(0x666666); // Gray out
         this.setAlpha(0.7);
+        this.setScale(this._baseScale);
 
         // Add score to player
         this.scene.addScore(this.scoreValue);
@@ -273,6 +285,8 @@ export default class BasicZombie extends Phaser.Physics.Arcade.Sprite {
         this.setTint(0x88ff88);
         this.setAlpha(1);
         this.setVelocity(0, 0);
+        this.setScale(this._baseScale);
+        this._walkTimer = 0;
         this.lastAttackTime = 0;
         this.lastPathfindTime = 0;
     }

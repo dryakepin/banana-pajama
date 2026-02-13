@@ -40,6 +40,9 @@ export default class FastZombie extends Phaser.Physics.Arcade.Sprite {
         this.sprintRange = 200; // Distance at which fast zombie "sprints"
         this.zigzagTimer = 0;
         this.zigzagDirection = 1;
+
+        // Walk animation state
+        this._baseScale = 0.12;
     }
     
     preUpdate(time, delta) {
@@ -110,23 +113,28 @@ export default class FastZombie extends Phaser.Physics.Arcade.Sprite {
             }
             
             this.setVelocity(velocityX, velocityY);
-            
+
             // Handle sprite rotation and flipping with more dramatic movement
             if (velocityX !== 0 || velocityY !== 0) {
                 const angle = Math.atan2(velocityY, velocityX);
-                
+
                 // Fast zombie has more exaggerated rotation
                 if (velocityX < 0) {
                     this.setFlipY(true);
-                    this.setRotation(angle + Math.sin(this.zigzagTimer / 100) * 0.3); // Slight wobble
+                    this.setRotation(angle + Math.sin(this.zigzagTimer / 100) * 0.3);
                 } else {
                     this.setFlipY(false);
                     this.setRotation(angle + Math.sin(this.zigzagTimer / 100) * 0.3);
                 }
             }
+
+            // Scale bob while moving - twitchy pulse
+            const bob = Math.sin(this.zigzagTimer * 0.012) * 0.01;
+            this.setScale(this._baseScale + bob);
         } else {
             // Stop moving when in attack range
             this.setVelocity(0, 0);
+            this.setScale(this._baseScale);
         }
     }
     
@@ -283,6 +291,7 @@ export default class FastZombie extends Phaser.Physics.Arcade.Sprite {
         // Death animation/effect
         this.setTint(0x444444); // Dark gray out
         this.setAlpha(0.6);
+        this.setScale(this._baseScale);
 
         // Add score to player (medium score)
         this.scene.addScore(this.scoreValue);
@@ -321,6 +330,7 @@ export default class FastZombie extends Phaser.Physics.Arcade.Sprite {
         this.clearTint(); // Use original sprite colors
         this.setAlpha(1);
         this.setVelocity(0, 0);
+        this.setScale(this._baseScale);
         this.lastAttackTime = 0;
         this.lastPathfindTime = 0;
     }
