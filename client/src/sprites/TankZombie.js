@@ -20,7 +20,7 @@ export default class TankZombie extends Phaser.Physics.Arcade.Sprite {
         this.lastAttackTime = 0;
         
         // Visual properties - tank zombie is bigger
-        this.setScale(0.16); // Double the size of basic zombie (0.08 * 2)
+        this.setScale(0.50); // Larger than other zombies
         // No tint - use original sprite colors
         
         // Physics properties - tank is heavier
@@ -43,7 +43,7 @@ export default class TankZombie extends Phaser.Physics.Arcade.Sprite {
 
         // Walk animation state
         this._walkTimer = 0;
-        this._baseScale = 0.16;
+        this._baseScale = 0.50;
     }
     
     preUpdate(time, delta) {

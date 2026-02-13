@@ -5,7 +5,7 @@ import TankZombie from '../sprites/TankZombie.js';
 import FastZombie from '../sprites/FastZombie.js';
 import AnimatedZombie from '../sprites/AnimatedZombie.js';
 import PowerUp from '../sprites/PowerUp.js';
-import TileMap from '../world/TileMap.js';
+import TileMap, { MAP_MIN_X, MAP_MIN_Y, MAP_WIDTH, MAP_HEIGHT } from '../world/TileMap.js';
 import VirtualJoystick from '../ui/VirtualJoystick.js';
 import AudioManager from '../utils/AudioManager.js';
 import SoundEffects from '../utils/SoundEffects.js';
@@ -144,17 +144,17 @@ export default class GameScene extends Phaser.Scene {
         this.gameTime = 0;
         this.hp = 100;
 
-        // Create large world bounds for infinite scrolling feel
-        this.physics.world.setBounds(-10000, -10000, 20000, 20000);
+        // Set world bounds to match tile map (5x screen size, centered on origin)
+        this.physics.world.setBounds(MAP_MIN_X, MAP_MIN_Y, MAP_WIDTH, MAP_HEIGHT);
 
         // Initialize tile-based world
         this.tileMap = new TileMap(this);
 
         // Create player (banana) at world center
         this.player = this.physics.add.sprite(0, 0, 'banana');
-        this.player.setScale(0.1);
-        // Remove world bounds collision for infinite feel
-        this.player.setCollideWorldBounds(false);
+        this.player.setScale(0.4);
+        // Collide with world bounds to prevent leaving the map
+        this.player.setCollideWorldBounds(true);
 
         // Set camera to follow player and keep them centered
         this.cameras.main.startFollow(this.player);
@@ -384,6 +384,15 @@ export default class GameScene extends Phaser.Scene {
         }
         
         this.handleMovement();
+
+        // Hard clamp after physics step — this is the definitive boundary
+        if (this.player) {
+            const halfW = MAP_WIDTH / 2;
+            const halfH = MAP_HEIGHT / 2;
+            this.player.x = Math.max(-halfW, Math.min(halfW, this.player.x));
+            this.player.y = Math.max(-halfH, Math.min(halfH, this.player.y));
+        }
+
         this.updateUI();
         this.updatePowerUps();
         this.updatePowerUpIndicators();
@@ -454,6 +463,12 @@ export default class GameScene extends Phaser.Scene {
         }
 
         this.player.setVelocity(velocityX, velocityY);
+
+        // Hard clamp player position to map bounds
+        const halfW = MAP_WIDTH / 2;
+        const halfH = MAP_HEIGHT / 2;
+        this.player.x = Math.max(-halfW, Math.min(halfW, this.player.x));
+        this.player.y = Math.max(-halfH, Math.min(halfH, this.player.y));
     }
 
     updateUI() {

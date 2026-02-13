@@ -20,7 +20,7 @@ export default class BasicZombie extends Phaser.Physics.Arcade.Sprite {
         this.lastAttackTime = 0;
         
         // Visual properties
-        this.setScale(0.1); // Match player size
+        this.setScale(0.36); // Match player size
         this.setTint(0x88ff88); // Light green tint
         
         // Physics properties
@@ -37,7 +37,7 @@ export default class BasicZombie extends Phaser.Physics.Arcade.Sprite {
 
         // Walk animation state
         this._walkTimer = 0;
-        this._baseScale = 0.1;
+        this._baseScale = 0.36;
     }
     
     preUpdate(time, delta) {

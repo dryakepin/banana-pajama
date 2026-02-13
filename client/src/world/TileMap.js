@@ -5,6 +5,21 @@ export const TILE_SIZE = 64;
 export const CHUNK_SIZE = 16; // 16x16 tiles per chunk (1024x1024 pixels)
 export const RENDER_DISTANCE = 3; // Load 3 chunks in each direction
 
+// Map bounds: 3x screen size (1024x768), centered on origin
+const SCREEN_W = 1024;
+const SCREEN_H = 768;
+export const MAP_WIDTH = SCREEN_W * 3;   // 3072
+export const MAP_HEIGHT = SCREEN_H * 3;  // 2304
+export const MAP_MIN_X = -MAP_WIDTH / 2; // -2560
+export const MAP_MIN_Y = -MAP_HEIGHT / 2; // -1920
+export const MAP_MAX_X = MAP_WIDTH / 2;  // 2560
+export const MAP_MAX_Y = MAP_HEIGHT / 2; // 1920
+// Tile coordinate bounds
+const TILE_MIN_X = Math.floor(MAP_MIN_X / TILE_SIZE);
+const TILE_MIN_Y = Math.floor(MAP_MIN_Y / TILE_SIZE);
+const TILE_MAX_X = Math.ceil(MAP_MAX_X / TILE_SIZE) - 1;
+const TILE_MAX_Y = Math.ceil(MAP_MAX_Y / TILE_SIZE) - 1;
+
 export const TILE_TYPES = {
     STREET: 'street',
     SIDEWALK: 'sidewalk',
@@ -223,9 +238,15 @@ export default class TileMap {
     
     // Generate tile type for a given tile coordinate (procedural)
     generateTileType(tileX, tileY) {
+        // Border: solid row of buildings at map edges
+        if (tileX <= TILE_MIN_X || tileX >= TILE_MAX_X ||
+            tileY <= TILE_MIN_Y || tileY >= TILE_MAX_Y) {
+            return TILE_TYPES.BUILDING;
+        }
+
         const absX = Math.abs(tileX);
         const absY = Math.abs(tileY);
-        
+
         // Create street grid with varied spacing
         const blockSizeX = this.getBlockSize(tileX);
         const blockSizeY = this.getBlockSize(tileY);
