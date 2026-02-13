@@ -1,6 +1,8 @@
 const path = require('path');
+const webpack = require('webpack');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
+const pkg = require('./package.json');
 
 module.exports = {
   entry: './src/index.js',
@@ -25,6 +27,10 @@ module.exports = {
     new HtmlWebpackPlugin({
       template: './src/index.html',
       title: 'Banana Pajama Zombie Shooter',
+    }),
+    new webpack.DefinePlugin({
+      __BUILD_VERSION__: JSON.stringify(pkg.version),
+      __BUILD_DATE__: JSON.stringify(new Date().toISOString().split('T')[0]),
     }),
     new CopyWebpackPlugin({
       patterns: [

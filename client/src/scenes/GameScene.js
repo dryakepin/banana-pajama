@@ -214,7 +214,7 @@ export default class GameScene extends Phaser.Scene {
         this.physics.add.overlap(this.bullets, this.animatedZombies, this.bulletHitAnimatedZombie, null, this);
         this.physics.add.overlap(this.player, this.powerUps, this.playerPickupPowerUp, null, this);
 
-        // Hide default cursor and use custom crosshair
+        // Hide default cursor and use custom crosshair (restored in gameOver/exit)
         this.input.setDefaultCursor('none');
 
         // Create UI
@@ -284,6 +284,7 @@ export default class GameScene extends Phaser.Scene {
 
         // ESC to return to menu
         this.input.keyboard.on('keydown-ESC', () => {
+            this.input.setDefaultCursor('default');
             if (this._audio) this._audio.cleanup();
             this.sound.stopAll();
             this.scene.start('MenuScene');
@@ -887,6 +888,9 @@ export default class GameScene extends Phaser.Scene {
             this.animatedZombieSpawnTimer.destroy();
         }
         
+        // Restore default cursor
+        this.input.setDefaultCursor('default');
+
         // Stop all game audio
         if (this._audio) this._audio.cleanup();
         this.sound.stopAll();
@@ -1120,6 +1124,7 @@ export default class GameScene extends Phaser.Scene {
         }).setOrigin(0.5).setScrollFactor(0);
         menuButton.setInteractive({ useHandCursor: true });
         menuButton.on('pointerdown', () => {
+            this.input.setDefaultCursor('default');
             if (this._audio) this._audio.cleanup();
             this.sound.stopAll();
             this.scene.start('MenuScene');

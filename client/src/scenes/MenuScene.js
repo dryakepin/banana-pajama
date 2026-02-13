@@ -50,7 +50,10 @@ export default class MenuScene extends Phaser.Scene {
     }
 
     createScrollingText(width, height) {
-        const scrollText = 'WASD to Move \u2022 Mouse to aim \u2022 Made by Arthur, Valdemar, Kaare, and Claude \u2022 Survive as long as possible';
+        /* global __BUILD_VERSION__, __BUILD_DATE__ */
+        const version = typeof __BUILD_VERSION__ !== 'undefined' ? __BUILD_VERSION__ : 'dev';
+        const buildDate = typeof __BUILD_DATE__ !== 'undefined' ? __BUILD_DATE__ : '';
+        const scrollText = `WASD to Move \u2022 Mouse to aim \u2022 Made by Arthur, Valdemar, Kaare, and Claude \u2022 Survive as long as possible \u2022 v${version} (${buildDate})`;
         const seamlessText = scrollText + ' \u2022 ' + scrollText;
 
         this.scrollingText = this.add.text(0, height * 0.95, seamlessText, {
