@@ -42,6 +42,12 @@ export default class GameScene extends Phaser.Scene {
         this.lastShotTime = 0; // Track when last shot was fired
         this.shotCooldown = 400; // 400ms between shots
         
+        // Difficulty scaling
+        this.difficultyLevel = 0;
+        this.difficultyInterval = 30; // seconds between level-ups
+        this.zombieSpeedMultiplier = 1;
+        this.zombieHpMultiplier = 1;
+
         // Power-up states
         this.isInvincible = false;
         this.invincibilityEndTime = 0;
@@ -342,7 +348,19 @@ export default class GameScene extends Phaser.Scene {
             color: '#ffffff',
             align: timerAlign
         }).setOrigin(timerOriginX, 0).setScrollFactor(0);
-        
+
+        // Difficulty level indicator (below timer)
+        const levelX = this.isMobile ? width / 2 : width - 20;
+        const levelY = timerY + 22;
+        const levelOriginX = this.isMobile ? 0.5 : 1;
+
+        this.difficultyText = this.add.text(levelX, levelY, 'Level 0', {
+            fontSize: '14px',
+            fontFamily: 'Courier New, monospace',
+            color: '#aaaaaa',
+            align: timerAlign
+        }).setOrigin(levelOriginX, 0).setScrollFactor(0);
+
         // Mobile pause button (top-right corner)
         if (this.isMobile) {
             this.pauseButton = this.add.text(width - 20, 30, '⏸', {
@@ -459,10 +477,80 @@ export default class GameScene extends Phaser.Scene {
     updateTimer() {
         this.gameTime++;
         this.score++; // 1 point per second survival bonus
-        
+
         const minutes = Math.floor(this.gameTime / 60);
         const seconds = this.gameTime % 60;
         this.timerText.setText(`Time: ${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
+
+        this.updateDifficulty();
+    }
+
+    updateDifficulty() {
+        if (this.gameTime === 0 || this.gameTime % this.difficultyInterval !== 0) {
+            return;
+        }
+
+        this.difficultyLevel++;
+
+        // Spawn rate formula: max(floor, floor(baseRate * 0.9^level))
+        const level = this.difficultyLevel;
+        const scaledRate = (base, floor) => Math.max(floor, Math.floor(base * Math.pow(0.9, level)));
+
+        const newBasicRate = scaledRate(2000, 500);
+        const newFastRate = scaledRate(3000, 700);
+        const newTankRate = scaledRate(8000, 2000);
+        const newAnimatedRate = scaledRate(6000, 1500);
+
+        // Remove old timers and create new ones with updated delays
+        this.zombieSpawnTimer.remove();
+        this.zombieSpawnTimer = this.time.addEvent({
+            delay: newBasicRate,
+            callback: this.spawnZombie,
+            callbackScope: this,
+            loop: true
+        });
+
+        this.fastZombieSpawnTimer.remove();
+        this.fastZombieSpawnTimer = this.time.addEvent({
+            delay: newFastRate,
+            callback: this.spawnFastZombie,
+            callbackScope: this,
+            loop: true
+        });
+
+        this.tankZombieSpawnTimer.remove();
+        this.tankZombieSpawnTimer = this.time.addEvent({
+            delay: newTankRate,
+            callback: this.spawnTankZombie,
+            callbackScope: this,
+            loop: true
+        });
+
+        this.animatedZombieSpawnTimer.remove();
+        this.animatedZombieSpawnTimer = this.time.addEvent({
+            delay: newAnimatedRate,
+            callback: this.spawnAnimatedZombie,
+            callbackScope: this,
+            loop: true
+        });
+
+        // Speed multiplier: min(1.5, 1 + level * 0.025)
+        this.zombieSpeedMultiplier = Math.min(1.5, 1 + level * 0.025);
+
+        // HP multiplier: min(2.0, 1 + max(0, level - 3) * 0.05) — kicks in at level 4
+        this.zombieHpMultiplier = Math.min(2.0, 1 + Math.max(0, level - 3) * 0.05);
+
+        // Update HUD
+        this.difficultyText.setText(`Level ${level}`);
+
+        // Color shifts from grey → yellow → red as difficulty increases
+        if (level >= 8) {
+            this.difficultyText.setColor('#ff4444');
+        } else if (level >= 4) {
+            this.difficultyText.setColor('#ffaa44');
+        } else {
+            this.difficultyText.setColor('#ffff44');
+        }
     }
 
     updateCrosshair() {
@@ -771,6 +859,15 @@ export default class GameScene extends Phaser.Scene {
             }
         } else {
             zombie.reset(x, y);
+        }
+
+        // Apply difficulty scaling to freshly created/reset zombie
+        if (this.zombieSpeedMultiplier > 1) {
+            zombie.speed *= this.zombieSpeedMultiplier;
+        }
+        if (this.zombieHpMultiplier > 1) {
+            zombie.maxHealth = Math.ceil(zombie.maxHealth * this.zombieHpMultiplier);
+            zombie.health = zombie.maxHealth;
         }
     }
 
