@@ -18,8 +18,10 @@ export default class AudioManager {
     static playMusic(scene, key, { loop = true, volume = 0.5 } = {}) {
         let music = null;
         let html5Fallback = null;
+        let cleaned = false;
 
         const createAndPlay = () => {
+            if (cleaned) return;
             try {
                 if (music) {
                     music.stop();
@@ -33,14 +35,25 @@ export default class AudioManager {
             }
         };
 
+        const cleanup = () => {
+            cleaned = true;
+            // Remove pending unlock listeners so they don't fire after scene switch
+            scene.input.off('pointerdown', unlock);
+            scene.input.keyboard?.off('keydown', unlock);
+            AudioManager._cleanup(music, html5Fallback);
+            music = null;
+            html5Fallback = null;
+        };
+
         // If context is ready, play immediately
         if (!scene.sound.context || scene.sound.context.state !== 'suspended') {
             createAndPlay();
-            return { get music() { return music; }, cleanup: () => AudioManager._cleanup(music, html5Fallback) };
+            return { get music() { return music; }, cleanup };
         }
 
         // Context is suspended — wait for user interaction
         const unlock = () => {
+            if (cleaned) return;
             if (isiOS) {
                 // iOS: resume context and play synchronously in the interaction handler
                 if (scene.sound.context && scene.sound.context.state === 'suspended') {
@@ -50,10 +63,10 @@ export default class AudioManager {
 
                 // Verify after a tick and retry once if needed
                 setTimeout(() => {
-                    if (music && !music.isPlaying) {
+                    if (!cleaned && music && !music.isPlaying) {
                         try {
                             if (scene.sound.context && scene.sound.context.state === 'suspended') {
-                                scene.sound.context.resume().then(() => music.play()).catch(() => {});
+                                scene.sound.context.resume().then(() => { if (!cleaned) music.play(); }).catch(() => {});
                             } else {
                                 music.play();
                             }
@@ -76,17 +89,13 @@ export default class AudioManager {
             scene.input.keyboard.once('keydown', unlock);
         }
 
-        return {
-            get music() { return music; },
-            cleanup: () => AudioManager._cleanup(music, html5Fallback),
-        };
+        return { get music() { return music; }, cleanup };
     }
 
     static _tryHtml5Fallback(key, volume, loop) {
         if (!isiOS) return null;
         try {
             const audio = new Audio();
-            // Derive path from key name — assets follow assets/<key>.mp3 convention
             audio.src = `assets/${key}.mp3`;
             audio.loop = loop;
             audio.volume = volume;

@@ -143,6 +143,8 @@ export default class GameOverScene extends Phaser.Scene {
     }
 
     returnToMenu() {
+        if (this._audio) this._audio.cleanup();
+        this.sound.stopAll();
         this.scene.start('MenuScene');
     }
 }

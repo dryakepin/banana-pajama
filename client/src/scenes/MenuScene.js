@@ -83,15 +83,15 @@ export default class MenuScene extends Phaser.Scene {
     }
 
     startGame() {
-        this.sound.stopAll();
         if (this._audio) this._audio.cleanup();
+        this.sound.stopAll();
         this.cleanupTweens();
         this.scene.start('GameScene');
     }
 
     showHighScores() {
-        this.sound.stopAll();
         if (this._audio) this._audio.cleanup();
+        this.sound.stopAll();
         this.cleanupTweens();
         this.scene.start('HighScoreScene');
     }

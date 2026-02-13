@@ -284,7 +284,7 @@ export default class GameScene extends Phaser.Scene {
 
         // ESC to return to menu
         this.input.keyboard.on('keydown-ESC', () => {
-            // Stop ALL audio before returning to menu
+            if (this._audio) this._audio.cleanup();
             this.sound.stopAll();
             this.scene.start('MenuScene');
         });
@@ -888,8 +888,9 @@ export default class GameScene extends Phaser.Scene {
         }
         
         // Stop all game audio
+        if (this._audio) this._audio.cleanup();
         this.sound.stopAll();
-        
+
         // Clean up tile map
         if (this.tileMap) {
             this.tileMap.destroy();
@@ -1119,7 +1120,7 @@ export default class GameScene extends Phaser.Scene {
         }).setOrigin(0.5).setScrollFactor(0);
         menuButton.setInteractive({ useHandCursor: true });
         menuButton.on('pointerdown', () => {
-            // Stop ALL audio before returning to menu
+            if (this._audio) this._audio.cleanup();
             this.sound.stopAll();
             this.scene.start('MenuScene');
         });

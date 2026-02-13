@@ -420,7 +420,11 @@ export default class NameEntryScene extends Phaser.Scene {
         if (this.cursorTimer) {
             this.cursorTimer.destroy();
         }
-        
+
+        // Stop audio before switching
+        if (this._audio) this._audio.cleanup();
+        this.sound.stopAll();
+
         // Go to main menu
         this.scene.start('MenuScene');
     }
