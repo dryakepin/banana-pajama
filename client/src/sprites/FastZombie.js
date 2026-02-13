@@ -20,7 +20,7 @@ export default class FastZombie extends Phaser.Physics.Arcade.Sprite {
         this.lastAttackTime = 0;
         
         // Visual properties
-        this.setScale(0.44); // Slightly larger than basic zombie
+        this.setScale(0.12); // Slightly larger than basic zombie
         // No tint - use original sprite colors from zombie-3.png
         
         // Physics properties
@@ -42,7 +42,7 @@ export default class FastZombie extends Phaser.Physics.Arcade.Sprite {
         this.zigzagDirection = 1;
 
         // Walk animation state
-        this._baseScale = 0.44;
+        this._baseScale = 0.12;
     }
     
     preUpdate(time, delta) {

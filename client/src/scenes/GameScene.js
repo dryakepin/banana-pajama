@@ -152,7 +152,7 @@ export default class GameScene extends Phaser.Scene {
 
         // Create player (banana) at world center
         this.player = this.physics.add.sprite(0, 0, 'banana');
-        this.player.setScale(0.4);
+        this.player.setScale(0.1);
         // Collide with world bounds to prevent leaving the map
         this.player.setCollideWorldBounds(true);
 
