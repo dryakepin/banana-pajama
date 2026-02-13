@@ -7,22 +7,27 @@ const { Pool } = require('pg');
  * - Supabase (PostgreSQL)
  */
 function createDatabasePool() {
+    const isProduction = process.env.NODE_ENV === 'production';
+
     // Check if using Supabase connection string
     if (process.env.DATABASE_URL) {
         const connectionString = process.env.DATABASE_URL;
-        
+
         // Detect if it's a Supabase URL
         const isSupabase = connectionString.includes('supabase.co');
-        
-        // Configure SSL - Supabase requires SSL
-        const sslConfig = isSupabase 
-            ? { rejectUnauthorized: false }
-            : (process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false);
+
+        // Configure SSL - Supabase needs rejectUnauthorized: false due to their cert setup
+        // For other production hosts, enable full verification
+        let sslConfig = false;
+        if (isSupabase) {
+            sslConfig = { rejectUnauthorized: false };
+        } else if (isProduction) {
+            sslConfig = { rejectUnauthorized: true };
+        }
 
         return new Pool({
             connectionString,
             ssl: sslConfig,
-            // Connection pool settings
             max: 20,
             idleTimeoutMillis: 30000,
             connectionTimeoutMillis: 2000,
@@ -40,7 +45,7 @@ function createDatabasePool() {
             database: process.env.DB_NAME || 'postgres',
             user: process.env.DB_USER || 'postgres',
             password: process.env.DB_PASSWORD,
-            ssl: { rejectUnauthorized: false }, // Supabase requires SSL
+            ssl: { rejectUnauthorized: false }, // Supabase requires this
             max: 20,
             idleTimeoutMillis: 30000,
             connectionTimeoutMillis: 2000,
@@ -48,13 +53,17 @@ function createDatabasePool() {
     }
 
     // Default: Local Docker Compose
+    if (isProduction && !process.env.DB_PASSWORD) {
+        console.error('DB_PASSWORD environment variable is required in production');
+    }
+
     return new Pool({
         host: process.env.DB_HOST || 'localhost',
         port: process.env.DB_PORT || 5432,
         database: process.env.DB_NAME || 'banana_pajama',
         user: process.env.DB_USER || 'postgres',
         password: process.env.DB_PASSWORD || 'banana_dev_password',
-        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+        ssl: isProduction ? { rejectUnauthorized: true } : false,
         max: 20,
         idleTimeoutMillis: 30000,
         connectionTimeoutMillis: 2000,
@@ -67,21 +76,19 @@ const pool = createDatabasePool();
 // Test database connection on module load
 pool.connect((err, client, release) => {
     if (err) {
-        console.error('❌ Error connecting to database:', err.message);
-        console.error('   Check your database connection settings');
+        console.error('Error connecting to database:', err.message);
+        console.error('Check your database connection settings');
     } else {
         const provider = process.env.DB_PROVIDER || (process.env.DATABASE_URL ? 'supabase' : 'local');
-        console.log(`✅ Database connected successfully (${provider})`);
+        console.log(`Database connected successfully (${provider})`);
         release();
     }
 });
 
-// Handle pool errors
+// Handle pool errors gracefully - log and let the pool recover
 pool.on('error', (err) => {
-    console.error('Unexpected error on idle client', err);
-    process.exit(-1);
+    console.error('Unexpected error on idle database client:', err.message);
+    // Don't crash - the pool will remove the dead client and create a new one
 });
 
 module.exports = pool;
-
-

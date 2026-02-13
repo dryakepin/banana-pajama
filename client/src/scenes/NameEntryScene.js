@@ -1,9 +1,10 @@
 import Phaser from 'phaser';
+import AudioManager from '../utils/AudioManager.js';
 
 export default class NameEntryScene extends Phaser.Scene {
     constructor() {
         super({ key: 'NameEntryScene' });
-        this.backgroundMusic = null;
+        this._audio = null;
         this.playerName = '';
         this.maxNameLength = 20;
         this.scoreData = null;
@@ -425,17 +426,7 @@ export default class NameEntryScene extends Phaser.Scene {
     }
 
     startBackgroundMusic() {
-        // Stop any existing music
-        if (this.backgroundMusic) {
-            this.backgroundMusic.stop();
-        }
-        
-        // Start menu theme music
-        this.backgroundMusic = this.sound.add('zombie-theme', {
-            loop: true,
-            volume: 0.3
-        });
-        this.backgroundMusic.play();
+        this._audio = AudioManager.playMusic(this, 'zombie-theme', { volume: 0.3 });
     }
 
     destroy() {

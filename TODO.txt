@@ -1,15 +1,7 @@
 # Banana Pajama Zombie Shooter - TODO List
-Generated: 2025-08-10
+Updated: 2026-02-13
 
 ## HIGH PRIORITY - Production Issues
-
-### Game Functionality
-- [x] ~~Fix high score system in standalone mode (currently returns empty array)~~ **NEEDS REDO: Only fixed UI, backend still missing**
-- [x] ~~Fix bug: High score cannot be saved (the system says "failed to save")~~ **NEEDS REDO: Mock responses only**
-- [x] Fix bug: On mobile, the screen is too small to see the high score input field (it's below the screen)
-- [ ] Test all game scenes work correctly without backend
-- [ ] Verify zombie spawning and gameplay mechanics work in production
-- [ ] Test mobile responsiveness on deployed version
 
 ### Performance & Optimization
 - [ ] Optimize bundle size (currently 1.2MB with warnings)
@@ -18,12 +10,9 @@ Generated: 2025-08-10
 - [ ] Monitor memory usage during extended gameplay
 
 ### Infrastructure & Deployment
-- [x] Deploy proper backend server to connect with existing PostgreSQL database
-- [x] Fix high score system to use real database storage instead of mock responses
-- [ ] Fix database authentication (password mismatch issue)
 - [ ] Set up proper domain name (no more changing IP addresses)
 - [ ] Configure SSL certificate for domain
-- [ ] We want everything deployed on AWS's EU region
+- [ ] Deploy to AWS EU region
 - [ ] Configure load balancer for production traffic
 - [ ] Implement proper monitoring and alerting
 - [ ] Set up automated deployment pipeline
@@ -33,24 +22,12 @@ Generated: 2025-08-10
 
 ### Game Features
 - [ ] In-game sounds: zombie spawn, zombie death, zombie growl, player death, shot
-- [ ] Add background music
-- [ ] Implement different zombie types (Fast Zombie not yet implemented)
-- [ ] Add power-ups system
-- [ ] Implement progressive difficulty scaling
-- [ ] Add pause/resume functionality
-
-### User Experience
-- [ ] Add proper loading screen
-- [ ] Implement game statistics tracking
 - [ ] Add keyboard shortcuts help screen
-- [ ] Improve mobile touch controls
 
 ### Technical Debt
-- [ ] Add comprehensive error handling
-- [ ] Implement proper TypeScript types
 - [ ] Add unit tests for game logic
 - [ ] Set up linting and code formatting
-- [ ] Document API endpoints
+- [ ] Implement proper TypeScript types
 
 ## LOW PRIORITY - Nice to Have
 
@@ -70,20 +47,24 @@ Generated: 2025-08-10
 - [ ] Add screen reader support
 
 ## COMPLETED ✅
-- [x] Fixed high score UI column spacing
-- [x] Added scrolling credits to main menu
-- [x] Fixed nginx proxy configuration for Docker
-- [x] Deployed to AWS ECS in us-east-1 region
-- [x] Resolved architecture compatibility issues
-- [x] Created standalone deployment configuration
-- [x] Game successfully running on public IP
+- [x] Full gameplay with 4 zombie types (Basic, Tank, Fast, Animated)
+- [x] 6 power-up types implemented
+- [x] Background music (menu + game themes)
+- [x] High score system with PostgreSQL backend
+- [x] Mobile responsive layout with touch controls
+- [x] Progressive difficulty scaling
+- [x] Pause/resume functionality
+- [x] Loading screen
+- [x] Game statistics tracking (sessions API)
+- [x] Deployed to AWS ECS Fargate
+- [x] Docker containerization for local development
+- [x] Scrolling credits on main menu
+- [x] Security audit: input validation, rate limiting, CORS, admin-protected endpoints
+- [x] Code quality: shared AudioManager, deduplicated zombie spawning, console.log cleanup
+- [x] Removed window.game debug exposure
+- [x] Server-side player name sanitization
 
 ## NOTES
-- **REAL BACKEND NOW DEPLOYED**: Full-stack application with Node.js API server
-- **DATABASE ALMOST CONNECTED**: PostgreSQL database accessible, auth issue remains
-- **HIGH SCORES API WORKING**: Real API endpoints responding (auth pending)
-- Game accessible at: http://54.90.137.126/ (IP changes with each deployment)
-- Using ECS Fargate with 512 CPU / 1024 MB memory for both client + server
-- Mobile responsive layout implemented
-- Nginx properly proxying API requests to backend server
-- **CRITICAL**: Database password authentication failing, otherwise fully functional
+- Game deployed on Vercel (frontend) + Supabase (PostgreSQL)
+- Also deployable via Docker Compose locally or AWS ECS Fargate
+- Mobile responsive with virtual joystick + auto-aim

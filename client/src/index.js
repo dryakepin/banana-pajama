@@ -80,14 +80,12 @@ const hideLoadingScreen = () => {
 // Unlock audio context on first user interaction
 const unlockAudioContext = () => {
     if (!game || !game.sound) {
-        console.log('🔊 Game or sound system not ready');
         return;
     }
     
     // Try to unlock WebAudio context if it exists
     if (game.sound.context) {
         if (game.sound.context.state === 'suspended') {
-            console.log('🔊 Audio context suspended, resuming...');
             const resumePromise = game.sound.context.resume();
             
             // For iOS: Also try to start a dummy sound to unlock
@@ -101,28 +99,17 @@ const unlockAudioContext = () => {
                     const playPromise = audio.play();
                     if (playPromise) {
                         playPromise.then(() => {
-                            console.log('🔊 iOS: Dummy audio played to unlock audio');
                             audio.pause();
                             audio.remove();
-                        }).catch(err => {
-                            console.log('🔊 iOS: Dummy audio play failed (expected):', err.message);
-                        });
+                        }).catch(() => {});
                     }
-                } catch (err) {
-                    console.log('🔊 iOS: Could not create dummy audio:', err.message);
+                } catch (e) {
+                    // Silent audio unlock failed - expected on some browsers
                 }
             }
             
-            resumePromise.then(() => {
-                console.log('🔊 Audio context unlocked successfully');
-            }).catch(error => {
-                console.error('🔊 Failed to resume audio context:', error);
-            });
-        } else {
-            console.log('🔊 Audio context already unlocked, state:', game.sound.context.state);
+            resumePromise.then(() => {}).catch(() => {});
         }
-    } else {
-        console.log('🔊 No WebAudio context (using HTML5 Audio fallback)');
     }
 };
 
@@ -137,7 +124,6 @@ game.events.once('ready', () => {
     // iOS: Apply fullscreen fix immediately when game is ready
     // This ensures the game starts in fullscreen mode from the beginning
     if (isiOS && isMobile) {
-        console.log('🍎 iOS: Game ready, applying initial fullscreen fix');
         setTimeout(() => {
             tryAndroidCSSTricks();
         }, 100);
@@ -147,17 +133,14 @@ game.events.once('ready', () => {
 // Phaser Scale Manager event setup
 const setupPhaserFullscreenEvents = () => {
     if (game && game.scale) {
-        console.log('🎮 Setting up Phaser fullscreen events');
         
         // Listen for fullscreen events
         game.scale.on('enterfullscreen', () => {
-            console.log('✅ Entered fullscreen via Phaser Scale Manager');
             document.body.classList.add('phaser-fullscreen');
             
             // Force landscape orientation if supported
             if (screen.orientation && screen.orientation.lock) {
                 screen.orientation.lock('landscape-primary').catch(err => {
-                    console.log('Orientation lock failed after fullscreen:', err);
                 });
             }
             
@@ -166,34 +149,18 @@ const setupPhaserFullscreenEvents = () => {
         });
         
         game.scale.on('leavefullscreen', () => {
-            console.log('❌ Left fullscreen via Phaser Scale Manager');
             document.body.classList.remove('phaser-fullscreen');
             setViewportHeight();
         });
         
         game.scale.on('fullscreenunsupported', () => {
-            console.log('⚠️ Phaser fullscreen unsupported - using CSS fallbacks');
             // Automatically apply CSS-based fullscreen for unsupported devices
             tryAndroidCSSTricks();
         });
         
         // Handle resize events from Phaser
-        game.scale.on('resize', (gameSize, baseSize, displaySize, resolution) => {
-            console.log('📱 Phaser resize event:', {
-                gameSize: `${gameSize.width}x${gameSize.height}`,
-                displaySize: `${displaySize.width}x${displaySize.height}`,
-                windowSize: `${window.innerWidth}x${window.innerHeight}`
-            });
-            
-            // Update CSS viewport height on resize
+        game.scale.on('resize', () => {
             setViewportHeight();
-        });
-        
-        // Log fullscreen capabilities
-        console.log('🔍 Phaser fullscreen capabilities:', {
-            available: game.scale.fullscreen.available,
-            active: game.scale.isFullscreen,
-            element: game.scale.fullscreen.element
         });
     }
 };
@@ -238,78 +205,18 @@ const isInFullscreen = () => {
     };
 };
 
-// Debug function for comprehensive fullscreen status
-const debugFullscreenStatus = () => {
-    const fullscreenStatus = isInFullscreen();
-    
-    console.log('🔍 Comprehensive Fullscreen Status:', {
-        ...fullscreenStatus,
-        'window.innerHeight': window.innerHeight,
-        'window.innerWidth': window.innerWidth,
-        'screen.height': screen.height,
-        'screen.width': screen.width,
-        'screen.availHeight': screen.availHeight,
-        'screen.availWidth': screen.availWidth,
-        'devicePixelRatio': window.devicePixelRatio,
-        'orientation': screen.orientation?.type || 'unknown',
-        'document.body.classList': Array.from(document.body.classList),
-        'canvas.dimensions': (() => {
-            const canvas = document.querySelector('canvas');
-            return canvas ? {
-                width: canvas.width,
-                height: canvas.height,
-                clientWidth: canvas.clientWidth,
-                clientHeight: canvas.clientHeight,
-                style: canvas.style.cssText
-            } : 'No canvas found';
-        })()
-    });
-};
-
-console.log('Browser detection:', {
-    isAndroid,
-    isiOS,
-    isChrome,
-    isSamsung,
-    isFirefox,
-    userAgent: navigator.userAgent
-});
-
-// Debug fullscreen every few seconds on mobile
-if (isMobile) {
-    setInterval(debugFullscreenStatus, 5000);
-    
-    // Also debug when fullscreen state might change
-    document.addEventListener('fullscreenchange', debugFullscreenStatus);
-    document.addEventListener('webkitfullscreenchange', debugFullscreenStatus);
-    document.addEventListener('mozfullscreenchange', debugFullscreenStatus);
-    document.addEventListener('msfullscreenchange', debugFullscreenStatus);
-    
-    // Debug on visibility change (app switching)
-    document.addEventListener('visibilitychange', () => {
-        if (!document.hidden) {
-            console.log('👁️ App became visible - checking fullscreen status');
-            setTimeout(debugFullscreenStatus, 100);
-        }
-    });
-}
-
 // Phaser-based fullscreen request with native Scale Manager
 const requestPhaserFullscreen = () => {
     if (game && game.scale) {
-        console.log('🎮 Using Phaser Scale Manager for fullscreen');
         
         try {
             if (game.scale.fullscreen.available) {
-                console.log('✅ Phaser fullscreen available - requesting');
                 game.scale.startFullscreen();
                 return true;
             } else {
-                console.log('❌ Phaser fullscreen not available - using fallback');
                 return false;
             }
         } catch (err) {
-            console.log('❌ Phaser fullscreen error:', err);
             return false;
         }
     }
@@ -326,7 +233,6 @@ const requestFullscreen = () => {
         setTimeout(() => {
             if (screen.orientation && screen.orientation.lock) {
                 screen.orientation.lock('landscape-primary').catch(err => {
-                    console.log('Orientation lock failed:', err);
                 });
             }
         }, 100);
@@ -335,7 +241,6 @@ const requestFullscreen = () => {
     
     // Fallback to DOM API for Android
     if (isAndroid) {
-        console.log('Android detected - trying DOM fullscreen methods');
         
         // Method 1: Standard Fullscreen API
         if (element.requestFullscreen) {
@@ -344,28 +249,22 @@ const requestFullscreen = () => {
                 
                 if (fullscreenPromise && typeof fullscreenPromise.then === 'function') {
                     fullscreenPromise.then(() => {
-                        console.log('✅ Android fullscreen success with requestFullscreen');
                         if (screen.orientation && screen.orientation.lock) {
                             screen.orientation.lock('landscape-primary').catch(err => {
-                                console.log('Orientation lock failed:', err);
                             });
                         }
                     }).catch(err => {
-                        console.log('❌ Android requestFullscreen failed:', err);
                         tryAndroidAlternatives();
                     });
                 } else {
-                    console.log('✅ Android fullscreen called (no Promise returned)');
                     setTimeout(() => {
                         if (screen.orientation && screen.orientation.lock) {
                             screen.orientation.lock('landscape-primary').catch(err => {
-                                console.log('Orientation lock failed:', err);
                             });
                         }
                     }, 100);
                 }
             } catch (err) {
-                console.log('❌ Android requestFullscreen exception:', err);
                 tryAndroidAlternatives();
             }
         } else {
@@ -382,7 +281,6 @@ const requestFullscreen = () => {
         } else if (element.msRequestFullscreen) {
             element.msRequestFullscreen();
         } else {
-            console.log('❌ No fullscreen API available - using CSS fallback');
             tryAndroidCSSTricks();
         }
     }
@@ -400,25 +298,19 @@ const tryAndroidAlternatives = () => {
             // Check if webkitRequestFullscreen returns a Promise
             if (webkitPromise && typeof webkitPromise.then === 'function') {
                 webkitPromise.then(() => {
-                    console.log('✅ Android fullscreen success with webkitRequestFullscreen');
                 }).catch(err => {
-                    console.log('❌ Android webkitRequestFullscreen failed:', err);
                     tryAndroidCSSTricks();
                 });
             } else {
                 // webkitRequestFullscreen doesn't return a Promise, assume it worked
-                console.log('✅ Android webkit fullscreen called (no Promise returned)');
             }
         } catch (err) {
-            console.log('❌ Android webkitRequestFullscreen exception:', err);
             tryAndroidCSSTricks();
         }
     } else if (element.webkitRequestFullScreen) {
         try {
             element.webkitRequestFullScreen();
-            console.log('✅ Android webkitRequestFullScreen called');
         } catch (err) {
-            console.log('❌ Android webkitRequestFullScreen exception:', err);
             tryAndroidCSSTricks();
         }
     } else {
@@ -439,7 +331,6 @@ const forcePhaserResize = () => {
         game.scale.resize(landscapeWidth, landscapeHeight);
         game.scale.setGameSize(landscapeWidth, landscapeHeight);
         
-        console.log(`🎮 iOS: Force resized Phaser to ${landscapeWidth}x${landscapeHeight} (window: ${currentWidth}x${currentHeight})`);
         
         // Also update the canvas element directly
         const canvas = document.querySelector('canvas');
@@ -453,14 +344,12 @@ const forcePhaserResize = () => {
 // CSS-based fullscreen simulation for Android and iOS
 const tryAndroidCSSTricks = () => {
     const platform = isiOS ? 'iOS' : (isAndroid ? 'Android' : 'Other');
-    console.log(`🔧 ${platform}: Falling back to CSS fullscreen simulation`);
     
     // Add platform-specific CSS class for fullscreen simulation
     if (isiOS) {
         document.body.classList.add('ios-fullscreen');
         
         // iOS-specific: Force immediate viewport correction and Phaser resize
-        console.log('🍎 iOS: Applying immediate fullscreen fix');
         
         // Hide Safari UI bars immediately
         window.scrollTo(0, 1);
@@ -496,7 +385,6 @@ const tryAndroidCSSTricks = () => {
                 canvas.style.padding = '0';
                 canvas.style.border = 'none';
                 
-                console.log('🍎 iOS: Applied canvas fullscreen styles');
             }
             
             if (gameContainer) {
@@ -549,7 +437,6 @@ const tryAndroidCSSTricks = () => {
     
     // Chrome Mobile specific tricks
     if (isChrome && isAndroid) {
-        console.log('🔧 Chrome Mobile: Applying Chrome-specific fullscreen tricks');
         
         // Force viewport meta tag update for Chrome
         const viewportMeta = document.querySelector('meta[name="viewport"]');
@@ -595,14 +482,12 @@ const tryAndroidCSSTricks = () => {
                 canvas.style.padding = '0';
                 canvas.style.border = 'none';
                 
-                console.log('🔧 Chrome: Force applied canvas fullscreen styles with dvh');
                 
                 // Also update Phaser's scale if available
                 if (game && game.scale) {
                     const newWidth = window.innerWidth;
                     const newHeight = window.innerHeight;
                     game.scale.setGameSize(newWidth, newHeight);
-                    console.log(`🎮 Updated Phaser game size to ${newWidth}x${newHeight}`);
                 }
             }
         }, 500);
@@ -624,7 +509,6 @@ const tryAndroidCSSTricks = () => {
                     const newWidth = window.innerWidth;
                     const newHeight = window.innerHeight;
                     game.scale.setGameSize(newWidth, newHeight);
-                    console.log(`🎮 Orientation change: Updated Phaser to ${newWidth}x${newHeight}`);
                 }
             }, 200);
         });
@@ -711,13 +595,6 @@ if (isMobile) {
             // For iOS: Also try to unlock audio by creating a dummy sound
             // This must happen synchronously in the user interaction handler
             if (isiOS && game && game.sound) {
-                console.log('🔊 iOS: Attempting to unlock audio system...', {
-                    soundSystemReady: !!game.sound,
-                    contextExists: !!game.sound.context,
-                    contextState: game.sound.context?.state,
-                    scenesReady: game.scene?.scenes?.length > 0
-                });
-                
                 try {
                     // Try to create and play a very short silent sound to unlock audio
                     // This must be done synchronously in the click/touch handler
@@ -729,22 +606,16 @@ if (isMobile) {
                             testSound.stop();
                             testSound.destroy();
                         }, 100);
-                        console.log('🔊 iOS: Test sound played to unlock audio system');
-                    } else {
-                        console.log('🔊 iOS: Audio not loaded yet, will unlock when scene plays audio');
                     }
-                } catch (err) {
-                    console.log('🔊 iOS: Test sound failed (may need scene to be ready):', err.message);
-                    console.log('🔊 iOS: Full error:', err);
+                } catch (e) {
+                    // Audio unlock attempt failed - non-critical
                 }
             }
             
             if (isAndroid) {
-                console.log('Android: Requesting fullscreen with Phaser + fallbacks');
                 
                 // Chrome Mobile needs special handling
                 if (isChrome) {
-                    console.log('Chrome Mobile: Using enhanced fullscreen approach');
                     
                     // Try Phaser fullscreen first, then DOM API
                     requestFullscreen();
@@ -753,17 +624,9 @@ if (isMobile) {
                     setTimeout(() => {
                         const phaserFullscreen = game && game.scale && game.scale.isFullscreen;
                         const domFullscreen = document.fullscreenElement || document.webkitFullscreenElement;
-                        
-                        console.log('Chrome Mobile: Checking fullscreen status...', {
-                            phaser: phaserFullscreen,
-                            dom: !!domFullscreen
-                        });
-                        
+
                         if (!phaserFullscreen && !domFullscreen) {
-                            console.log('Chrome Mobile: APIs failed, applying CSS fullscreen');
                             tryAndroidCSSTricks();
-                        } else {
-                            console.log('Chrome Mobile: Fullscreen API succeeded');
                         }
                     }, 500);
                     
@@ -775,7 +638,6 @@ if (isMobile) {
                         const domFullscreen = document.fullscreenElement || document.webkitFullscreenElement;
                         
                         if (!phaserFullscreen && !domFullscreen) {
-                            console.log('Android: Fullscreen APIs failed, using CSS fallback');
                             tryAndroidCSSTricks();
                         }
                     }, 1000);
@@ -786,7 +648,6 @@ if (isMobile) {
                 
                 // For iOS, immediately apply CSS fullscreen since native fullscreen always fails
                 if (isiOS) {
-                    console.log('🍎 iOS: Applying immediate CSS fullscreen (native API not available)');
                     // Apply immediately, not after delay - iOS needs immediate correction
                     tryAndroidCSSTricks();
                 }
@@ -815,7 +676,6 @@ if (isMobile) {
         // Hide browser UI
         setTimeout(hideBrowserUI, 100);
         
-        console.log(`Orientation changed - resized to: ${landscapeWidth}x${landscapeHeight}`);
     };
     
     // Listen for orientation changes
@@ -833,7 +693,6 @@ if (isMobile) {
     // Lock orientation to landscape if supported
     if (screen.orientation && screen.orientation.lock) {
         screen.orientation.lock('landscape').catch(err => {
-            console.log('Could not lock orientation:', err);
         });
     }
     
@@ -844,5 +703,3 @@ if (isMobile) {
     }, 100);
 }
 
-// Export for debugging
-window.game = game;

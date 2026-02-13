@@ -1,10 +1,10 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const pool = require('./config/database');
-require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -21,15 +21,18 @@ app.use(limiter);
 
 // CORS configuration
 app.use(cors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:8080',
+    origin: process.env.CORS_ORIGIN || [
+        'http://localhost:8080',
+        'https://banana-pajama.vercel.app'
+    ],
     credentials: true,
     methods: ['GET', 'POST', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 // Body parsing middleware
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10kb' }));
+app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 
 // Logging
 app.use(morgan('combined'));
@@ -60,13 +63,22 @@ app.get('/api/health', async (req, res) => {
             timestamp: new Date().toISOString(),
             service: 'Banana Pajama Zombie Shooter API',
             database: 'disconnected',
-            error: error.message
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Connection failed'
         });
     }
 });
 
 // Database initialization route (development/setup only)
 app.post('/api/init-db', async (req, res) => {
+    // Block in production unless admin key is provided
+    const adminKey = process.env.ADMIN_KEY;
+    if (process.env.NODE_ENV === 'production') {
+        const providedKey = req.headers['x-admin-key'];
+        if (!adminKey || providedKey !== adminKey) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
+    }
+
     try {
         // Create high_scores table
         await pool.query(`
@@ -168,18 +180,30 @@ app.post('/api/highscores', async (req, res) => {
         
         // Validate input
         if (!player_name || typeof score !== 'number' || typeof survival_time !== 'number') {
-            return res.status(400).json({ 
+            return res.status(400).json({
                 success: false,
-                error: 'Missing required fields: player_name, score, survival_time' 
+                error: 'Missing required fields: player_name, score, survival_time'
             });
         }
 
-        // Sanitize player name
-        const sanitizedName = player_name.toString().trim().substring(0, 50);
+        // Validate score bounds (max realistic: ~10 points/sec for 1 hour)
+        if (score < 0 || score > 50000 || !Number.isFinite(score)) {
+            return res.status(400).json({ success: false, error: 'Invalid score value' });
+        }
+        if (survival_time < 0 || survival_time > 7200 || !Number.isFinite(survival_time)) {
+            return res.status(400).json({ success: false, error: 'Invalid survival_time value' });
+        }
+        const kills = zombies_killed || 0;
+        if (kills < 0 || kills > 10000 || !Number.isFinite(kills)) {
+            return res.status(400).json({ success: false, error: 'Invalid zombies_killed value' });
+        }
+
+        // Sanitize player name - strip HTML/special chars, allow alphanumeric + basic symbols
+        const sanitizedName = player_name.toString().trim().substring(0, 50).replace(/[<>&"'/\\]/g, '');
         if (sanitizedName.length === 0) {
-            return res.status(400).json({ 
+            return res.status(400).json({
                 success: false,
-                error: 'Player name cannot be empty' 
+                error: 'Player name cannot be empty'
             });
         }
 
@@ -241,9 +265,18 @@ app.post('/api/sessions/end', async (req, res) => {
         const { session_id, final_score, survival_time, zombies_killed, power_ups_collected, shots_fired } = req.body;
         
         if (!session_id) {
-            return res.status(400).json({ 
+            return res.status(400).json({
                 success: false,
-                error: 'Session ID is required' 
+                error: 'Session ID is required'
+            });
+        }
+
+        // Validate UUID format
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!uuidRegex.test(session_id)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid session ID format'
             });
         }
 

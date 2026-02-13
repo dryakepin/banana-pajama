@@ -7,6 +7,7 @@ import AnimatedZombie from '../sprites/AnimatedZombie.js';
 import PowerUp from '../sprites/PowerUp.js';
 import TileMap from '../world/TileMap.js';
 import VirtualJoystick from '../ui/VirtualJoystick.js';
+import AudioManager from '../utils/AudioManager.js';
 
 export default class GameScene extends Phaser.Scene {
     constructor() {
@@ -31,7 +32,7 @@ export default class GameScene extends Phaser.Scene {
         this.tankZombieSpawnRate = 8000; // Tank zombies spawn every 8 seconds
         this.fastZombieSpawnRate = 3000; // Fast zombies spawn every 3 seconds for testing
         this.animatedZombieSpawnRate = 6000; // Animated zombies spawn every 6 seconds (less frequent due to complexity)
-        this.backgroundMusic = null;
+        this._audio = null;
         this.tileMap = null;
         this.virtualJoystick = null;
         this.isMobile = false;
@@ -112,21 +113,8 @@ export default class GameScene extends Phaser.Scene {
         
         // Handle load errors gracefully
         this.load.on('loaderror', (file) => {
-            console.log(`⚠️  Asset not found, using fallback: ${file.src}`);
-            console.log(`Failed to load: ${file.key}`);
+            console.warn(`Asset not found: ${file.key}`);
         });
-        
-        this.load.on('filecomplete', (key, type, data) => {
-            if (key.endsWith('-png')) {
-                console.log(`✅ Loaded tile asset: ${key}`);
-            }
-            if (key.startsWith('powerup-')) {
-                console.log(`✅ Loaded power-up asset: ${key}`);
-            }
-        });
-        
-        // Assets are fully loaded when preload completes - Phaser handles this automatically
-        console.log('🎯 Preload phase completed - all assets guaranteed to be loaded');
     }
 
     create() {
@@ -140,22 +128,6 @@ export default class GameScene extends Phaser.Scene {
                        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
                        // Only consider it mobile if it's a small screen AND has touch
                        (('ontouchstart' in window) && (window.innerWidth <= 768 || window.innerHeight <= 768));
-                       
-        // TEMPORARY: Uncomment the line below to force mobile mode for desktop testing  
-        // this.isMobile = true;
-        
-        console.log('Mobile detection:', {
-            android: this.sys.game.device.os.android,
-            iOS: this.sys.game.device.os.iOS,
-            userAgent: navigator.userAgent,
-            ontouchstart: 'ontouchstart' in window,
-            maxTouchPoints: navigator.maxTouchPoints,
-            screenWidth: window.innerWidth,
-            screenHeight: window.innerHeight,
-            isSmallScreen: (window.innerWidth <= 768 || window.innerHeight <= 768),
-            isMobile: this.isMobile,
-            detectionMethod: 'improved'
-        });
 
         // Create animations for animated zombie (zombie-4)
         this.createAnimatedZombieAnimations();
@@ -247,12 +219,6 @@ export default class GameScene extends Phaser.Scene {
 
         // Create UI
         this.createUI();
-
-        // Virtual joystick will be created dynamically on mobile when user first touches
-        if (this.isMobile) {
-            console.log(`Mobile device detected - dynamic joystick will be created on first touch`);
-            console.log(`Screen dimensions: ${width}x${height}`);
-        }
 
         // Start game timer
         this.gameTimer = this.time.addEvent({
@@ -594,7 +560,6 @@ export default class GameScene extends Phaser.Scene {
         this.input.on('pointerdown', (pointer) => {
             if (!this.virtualJoystick && this.joystickPointerId === null) {
                 // First touch - create joystick at touch location
-                console.log(`Creating dynamic joystick at (${pointer.x}, ${pointer.y})`);
                 this.virtualJoystick = new VirtualJoystick(this, pointer.x, pointer.y);
                 this.joystickPointerId = pointer.id;
                 this.virtualJoystick.handlePointerDown(pointer);
@@ -751,226 +716,73 @@ export default class GameScene extends Phaser.Scene {
         }
     }
 
-    spawnZombie() {
-        console.log('Spawning basic zombie...');
+    // Unified zombie spawn: picks a position at the screen edge and pools/creates the zombie
+    _spawnZombieOfType(group, ZombieClass, { spawnOffset = 50, spawnInside = false } = {}) {
         const { width, height } = this.cameras.main;
         const camera = this.cameras.main;
-        
-        // Get camera bounds in world coordinates
+
         const cameraLeft = camera.scrollX;
         const cameraRight = camera.scrollX + width;
         const cameraTop = camera.scrollY;
         const cameraBottom = camera.scrollY + height;
-        
-        // Choose random edge to spawn from (relative to camera view)
-        const edge = Phaser.Math.Between(0, 3); // 0=top, 1=right, 2=bottom, 3=left
+
+        const edge = Phaser.Math.Between(0, 3);
         let x, y;
-        
-        switch (edge) {
-            case 0: // Top
-                x = Phaser.Math.Between(cameraLeft, cameraRight);
-                y = cameraTop - 50;
-                break;
-            case 1: // Right
-                x = cameraRight + 50;
-                y = Phaser.Math.Between(cameraTop, cameraBottom);
-                break;
-            case 2: // Bottom
-                x = Phaser.Math.Between(cameraLeft, cameraRight);
-                y = cameraBottom + 50;
-                break;
-            case 3: // Left
-                x = cameraLeft - 50;
-                y = Phaser.Math.Between(cameraTop, cameraBottom);
-                break;
+
+        if (spawnInside) {
+            // Spawn inside screen boundaries (for animated zombies)
+            const margin = spawnOffset;
+            switch (edge) {
+                case 0: x = Phaser.Math.Between(cameraLeft + margin, cameraRight - margin); y = cameraTop + margin; break;
+                case 1: x = cameraRight - margin; y = Phaser.Math.Between(cameraTop + margin, cameraBottom - margin); break;
+                case 2: x = Phaser.Math.Between(cameraLeft + margin, cameraRight - margin); y = cameraBottom - margin; break;
+                case 3: x = cameraLeft + margin; y = Phaser.Math.Between(cameraTop + margin, cameraBottom - margin); break;
+            }
+        } else {
+            // Spawn outside screen boundaries
+            switch (edge) {
+                case 0: x = Phaser.Math.Between(cameraLeft, cameraRight); y = cameraTop - spawnOffset; break;
+                case 1: x = cameraRight + spawnOffset; y = Phaser.Math.Between(cameraTop, cameraBottom); break;
+                case 2: x = Phaser.Math.Between(cameraLeft, cameraRight); y = cameraBottom + spawnOffset; break;
+                case 3: x = cameraLeft - spawnOffset; y = Phaser.Math.Between(cameraTop, cameraBottom); break;
+            }
         }
-        
+
         // Find walkable spawn position
         if (this.tileMap && !this.tileMap.isWalkable(x, y)) {
             const walkablePos = this.tileMap.getNearestWalkablePosition(x, y);
             x = walkablePos.x;
             y = walkablePos.y;
         }
-        
-        // Get zombie from pool or create new one
-        let zombie = this.zombies.getFirstDead();
+
+        let zombie = group.getFirstDead();
         if (!zombie) {
-            zombie = new BasicZombie(this, x, y);
-            this.zombies.add(zombie);
+            try {
+                zombie = new ZombieClass(this, x, y);
+                group.add(zombie);
+            } catch (error) {
+                console.error(`Error creating ${ZombieClass.name}:`, error);
+                return;
+            }
         } else {
             zombie.reset(x, y);
         }
     }
 
+    spawnZombie() {
+        this._spawnZombieOfType(this.zombies, BasicZombie, { spawnOffset: 50 });
+    }
+
     spawnTankZombie() {
-        console.log('Spawning tank zombie...');
-        const { width, height } = this.cameras.main;
-        const camera = this.cameras.main;
-        
-        // Get camera bounds in world coordinates
-        const cameraLeft = camera.scrollX;
-        const cameraRight = camera.scrollX + width;
-        const cameraTop = camera.scrollY;
-        const cameraBottom = camera.scrollY + height;
-        
-        // Choose random edge to spawn from (relative to camera view)
-        const edge = Phaser.Math.Between(0, 3); // 0=top, 1=right, 2=bottom, 3=left
-        let x, y;
-        
-        switch (edge) {
-            case 0: // Top
-                x = Phaser.Math.Between(cameraLeft, cameraRight);
-                y = cameraTop - 80; // Spawn further away for tank zombies
-                break;
-            case 1: // Right
-                x = cameraRight + 80;
-                y = Phaser.Math.Between(cameraTop, cameraBottom);
-                break;
-            case 2: // Bottom
-                x = Phaser.Math.Between(cameraLeft, cameraRight);
-                y = cameraBottom + 80;
-                break;
-            case 3: // Left
-                x = cameraLeft - 80;
-                y = Phaser.Math.Between(cameraTop, cameraBottom);
-                break;
-        }
-        
-        // Find walkable spawn position
-        if (this.tileMap && !this.tileMap.isWalkable(x, y)) {
-            const walkablePos = this.tileMap.getNearestWalkablePosition(x, y);
-            x = walkablePos.x;
-            y = walkablePos.y;
-        }
-        
-        // Get tank zombie from pool or create new one
-        let tankZombie = this.tankZombies.getFirstDead();
-        if (!tankZombie) {
-            tankZombie = new TankZombie(this, x, y);
-            this.tankZombies.add(tankZombie);
-        } else {
-            tankZombie.reset(x, y);
-        }
+        this._spawnZombieOfType(this.tankZombies, TankZombie, { spawnOffset: 80 });
     }
 
     spawnFastZombie() {
-        console.log('Spawning FAST zombie...');
-        const { width, height } = this.cameras.main;
-        const camera = this.cameras.main;
-        
-        // Get camera bounds in world coordinates
-        const cameraLeft = camera.scrollX;
-        const cameraRight = camera.scrollX + width;
-        const cameraTop = camera.scrollY;
-        const cameraBottom = camera.scrollY + height;
-        
-        // Choose random edge to spawn from (relative to camera view)
-        const edge = Phaser.Math.Between(0, 3); // 0=top, 1=right, 2=bottom, 3=left
-        let x, y;
-        
-        switch (edge) {
-            case 0: // Top
-                x = Phaser.Math.Between(cameraLeft, cameraRight);
-                y = cameraTop - 60; // Medium spawn distance
-                break;
-            case 1: // Right
-                x = cameraRight + 60;
-                y = Phaser.Math.Between(cameraTop, cameraBottom);
-                break;
-            case 2: // Bottom
-                x = Phaser.Math.Between(cameraLeft, cameraRight);
-                y = cameraBottom + 60;
-                break;
-            case 3: // Left
-                x = cameraLeft - 60;
-                y = Phaser.Math.Between(cameraTop, cameraBottom);
-                break;
-        }
-        
-        // Find walkable spawn position
-        if (this.tileMap && !this.tileMap.isWalkable(x, y)) {
-            const walkablePos = this.tileMap.getNearestWalkablePosition(x, y);
-            x = walkablePos.x;
-            y = walkablePos.y;
-        }
-        
-        // Get fast zombie from pool or create new one
-        let fastZombie = this.fastZombies.getFirstDead();
-        console.log('fastZombie from pool:', fastZombie);
-        if (!fastZombie) {
-            console.log('Creating new FastZombie at position:', x, y);
-            try {
-                fastZombie = new FastZombie(this, x, y);
-                console.log('FastZombie created successfully:', fastZombie);
-                this.fastZombies.add(fastZombie);
-                console.log('FastZombie added to group');
-            } catch (error) {
-                console.error('Error creating FastZombie:', error);
-                return;
-            }
-        } else {
-            console.log('Resetting existing FastZombie');
-            fastZombie.reset(x, y);
-        }
+        this._spawnZombieOfType(this.fastZombies, FastZombie, { spawnOffset: 60 });
     }
 
     spawnAnimatedZombie() {
-        console.log('Spawning ANIMATED zombie...');
-        const { width, height } = this.cameras.main;
-        const camera = this.cameras.main;
-        
-        // Get camera bounds in world coordinates
-        const cameraLeft = camera.scrollX;
-        const cameraRight = camera.scrollX + width;
-        const cameraTop = camera.scrollY;
-        const cameraBottom = camera.scrollY + height;
-        
-        // Choose random edge to spawn from (relative to camera view)
-        const edge = Phaser.Math.Between(0, 3); // 0=top, 1=right, 2=bottom, 3=left
-        let x, y;
-        
-        // Spawn inside screen boundaries to show animation, but at edges for dramatic entrance
-        const margin = 50; // Distance from screen edge
-        
-        switch (edge) {
-            case 0: // Top edge, inside screen
-                x = Phaser.Math.Between(cameraLeft + margin, cameraRight - margin);
-                y = cameraTop + margin;
-                break;
-            case 1: // Right edge, inside screen
-                x = cameraRight - margin;
-                y = Phaser.Math.Between(cameraTop + margin, cameraBottom - margin);
-                break;
-            case 2: // Bottom edge, inside screen
-                x = Phaser.Math.Between(cameraLeft + margin, cameraRight - margin);
-                y = cameraBottom - margin;
-                break;
-            case 3: // Left edge, inside screen
-                x = cameraLeft + margin;
-                y = Phaser.Math.Between(cameraTop + margin, cameraBottom - margin);
-                break;
-        }
-        
-        console.log('Attempting to spawn animated zombie at:', x, y);
-        
-        // Get animated zombie from pool or create new one
-        let animatedZombie = this.animatedZombies.getFirstDead();
-        console.log('animatedZombie from pool:', animatedZombie);
-        if (!animatedZombie) {
-            console.log('Creating new AnimatedZombie at position:', x, y);
-            try {
-                animatedZombie = new AnimatedZombie(this, x, y);
-                console.log('AnimatedZombie created successfully:', animatedZombie);
-                this.animatedZombies.add(animatedZombie);
-                console.log('AnimatedZombie added to group');
-            } catch (error) {
-                console.error('Error creating AnimatedZombie:', error);
-                return;
-            }
-        } else {
-            console.log('Resetting existing AnimatedZombie');
-            animatedZombie.reset(x, y);
-        }
+        this._spawnZombieOfType(this.animatedZombies, AnimatedZombie, { spawnOffset: 50, spawnInside: true });
     }
 
     bulletHitZombie(bullet, zombie) {
@@ -1011,9 +823,7 @@ export default class GameScene extends Phaser.Scene {
 
     bulletHitAnimatedZombie(bullet, animatedZombie) {
         if (!bullet.active || !animatedZombie.isVulnerableToAttack()) return;
-        
-        console.log('Bullet hit animated zombie');
-        
+
         // Damage animated zombie
         const animatedZombieDied = animatedZombie.takeDamage(bullet.damage);
         
@@ -1026,7 +836,6 @@ export default class GameScene extends Phaser.Scene {
     damagePlayer(damage) {
         // Check invincibility
         if (this.isInvincible) {
-            console.log('Player is invincible - no damage taken');
             return;
         }
         
@@ -1053,141 +862,8 @@ export default class GameScene extends Phaser.Scene {
     }
 
     startBackgroundMusic() {
-        // Stop any existing music
-        if (this.backgroundMusic) {
-            this.backgroundMusic.stop();
-        }
-        
-        // Start game music with proper audio context handling
-        this.initializeGameAudio();
-    }
-    
-    initializeGameAudio() {
-        // Detect iOS
-        const isiOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-        console.log('🔊 Initializing game audio...', { isiOS, contextState: this.sound.context?.state });
-
-        // Stop any existing music from all sources
         this.sound.stopAll();
-
-        // Check if audio context needs to be unlocked
-        if (this.sound.context && this.sound.context.state === 'suspended') {
-            console.log('🔊 Audio context suspended in game, will start after user interaction');
-
-            // Create a one-time event listener for any user interaction
-            const unlockGameAudio = () => {
-                console.log('🔊 User interaction detected in game, unlocking audio...');
-
-                // For iOS: Resume context first, THEN create and play audio
-                // CRITICAL: Everything must happen synchronously in this handler
-                if (isiOS) {
-                    console.log('🔊 iOS detected: Resuming context and playing game audio synchronously');
-
-                    // Step 1: Resume context (returns promise, but don't wait)
-                    let resumePromise;
-                    if (this.sound.context && this.sound.context.state === 'suspended') {
-                        resumePromise = this.sound.context.resume();
-                        console.log('🔊 iOS: Game context resume() called');
-                    }
-
-                    // Step 2: Create and play audio SYNCHRONOUSLY in user interaction handler
-                    try {
-                        // Stop any existing music first
-                        if (this.backgroundMusic) {
-                            this.backgroundMusic.stop();
-                            this.backgroundMusic.destroy();
-                            this.backgroundMusic = null;
-                        }
-
-                        // Create new sound object synchronously
-                        this.backgroundMusic = this.sound.add('zombie-game', {
-                            loop: true,
-                            volume: 0.4 // Slightly quieter during gameplay
-                        });
-                        console.log('🔊 iOS: Game audio object created synchronously');
-
-                        // Play IMMEDIATELY (synchronously) - MUST be in user interaction handler
-                        this.backgroundMusic.play();
-                        console.log('🔊 iOS: Game audio play() called synchronously');
-                        
-                        // Verify it's actually playing
-                        setTimeout(() => {
-                            console.log('🔊 iOS: Game audio status check:', {
-                                isPlaying: this.backgroundMusic?.isPlaying,
-                                contextState: this.sound.context?.state,
-                                volume: this.backgroundMusic?.volume
-                            });
-                        }, 100);
-                    } catch (error) {
-                        console.error('🔊 iOS: Failed to play game audio:', error);
-                        console.error('🔊 iOS: Error details:', {
-                            message: error.message,
-                            stack: error.stack,
-                            contextState: this.sound.context?.state,
-                            soundSystemReady: !!this.sound
-                        });
-                    }
-
-                    // Log when resume completes (async, but audio should already be playing)
-                    if (resumePromise) {
-                        resumePromise.then(() => {
-                            console.log('🔊 iOS: Game audio context resumed successfully');
-                            console.log('🔊 iOS: Final game audio status:', {
-                                contextState: this.sound.context?.state,
-                                isPlaying: this.backgroundMusic?.isPlaying
-                            });
-                        }).catch(error => {
-                            console.error('🔊 iOS: Failed to resume game audio context:', error);
-                        });
-                    }
-                } else {
-                    // Other platforms
-                    if (this.sound.context) {
-                        this.sound.context.resume().then(() => {
-                            console.log('🔊 Game audio context resumed, starting background music');
-                            this.startGameMusic();
-                        }).catch(error => {
-                            console.error('🔊 Failed to resume game audio context:', error);
-                        });
-                    } else {
-                        // No WebAudio context, use HTML5 Audio
-                        this.startGameMusic();
-                    }
-                }
-
-                // Remove listeners after first interaction
-                this.input.off('pointerdown', unlockGameAudio);
-                this.input.keyboard?.off('keydown', unlockGameAudio);
-            };
-
-            // Listen for any pointer or keyboard interaction
-            this.input.once('pointerdown', unlockGameAudio);
-            if (this.input.keyboard) {
-                this.input.keyboard.once('keydown', unlockGameAudio);
-            }
-        } else {
-            // Audio context is already unlocked
-            console.log('🔊 Game audio context ready, starting background music immediately');
-            this.startGameMusic();
-        }
-    }
-
-    startGameMusic() {
-        try {
-            if (!this.backgroundMusic) {
-                // Stop any existing music from all sources
-                this.sound.stopAll();
-
-                this.backgroundMusic = this.sound.add('zombie-game', {
-                    loop: true,
-                    volume: 0.4 // Slightly quieter during gameplay
-                });
-            }
-            this.backgroundMusic.play();
-            console.log('🔊 Game music started successfully');
-        } catch (error) {
-            console.error('🔊 Failed to start game music:', error);
-        }
+        this._audio = AudioManager.playMusic(this, 'zombie-game', { volume: 0.4 });
     }
 
     gameOver() {
@@ -1238,17 +914,14 @@ export default class GameScene extends Phaser.Scene {
         // Check power-up expiration
         if (this.isInvincible && currentTime > this.invincibilityEndTime) {
             this.isInvincible = false;
-            console.log('Invincibility expired');
         }
         
         if (this.rapidFireActive && currentTime > this.rapidFireEndTime) {
             this.rapidFireActive = false;
-            console.log('Rapid fire expired');
         }
         
         if (this.dualShotActive && currentTime > this.dualShotEndTime) {
             this.dualShotActive = false;
-            console.log('Dual shot expired');
         }
     }
     
@@ -1262,26 +935,22 @@ export default class GameScene extends Phaser.Scene {
             powerUp.reset(x, y, type);
         }
         
-        console.log(`Spawned ${type} power-up at (${x}, ${y})`);
     }
     
     playerPickupPowerUp(player, powerUp) {
         if (!powerUp.isActive) return;
         
         powerUp.pickup(player);
-        console.log(`Player picked up ${powerUp.powerUpType} power-up`);
     }
     
     // Power-up effect methods
     healPlayer(amount) {
         this.hp = Math.min(100, this.hp + amount);
-        console.log(`Player healed for ${amount} HP. Current HP: ${this.hp}`);
     }
     
     makePlayerInvincible(duration) {
         this.isInvincible = true;
         this.invincibilityEndTime = this.time.now + duration;
-        console.log(`Player is invincible for ${duration/1000} seconds`);
         
         // Show power-up indicator
         this.showPowerUpIndicator('invincibility', duration);
@@ -1298,7 +967,6 @@ export default class GameScene extends Phaser.Scene {
     activateRapidFire(duration) {
         this.rapidFireActive = true;
         this.rapidFireEndTime = this.time.now + duration;
-        console.log(`Rapid fire active for ${duration/1000} seconds`);
         
         // Show power-up indicator
         this.showPowerUpIndicator('rapidFire', duration);
@@ -1307,14 +975,12 @@ export default class GameScene extends Phaser.Scene {
     activateDualShot(duration) {
         this.dualShotActive = true;
         this.dualShotEndTime = this.time.now + duration;
-        console.log(`Dual shot active for ${duration/1000} seconds`);
         
         // Show power-up indicator
         this.showPowerUpIndicator('dualShot', duration);
     }
     
     killAllZombies() {
-        console.log('Kill all zombies activated!');
         
         // Kill all basic zombies
         this.zombies.children.entries.forEach(zombie => {
@@ -1364,8 +1030,9 @@ export default class GameScene extends Phaser.Scene {
         this.physics.world.pause();
         
         // Pause background music
-        if (this.backgroundMusic && this.backgroundMusic.isPlaying) {
-            this.backgroundMusic.pause();
+        const music = this._audio?.music;
+        if (music && music.isPlaying) {
+            music.pause();
         }
         
         // Stop all timers
@@ -1374,7 +1041,6 @@ export default class GameScene extends Phaser.Scene {
         // Show pause dialog
         this.showPauseDialog();
         
-        console.log('Game paused');
     }
     
     resumeGame() {
@@ -1384,8 +1050,9 @@ export default class GameScene extends Phaser.Scene {
         this.physics.world.resume();
         
         // Resume background music
-        if (this.backgroundMusic && this.backgroundMusic.isPaused) {
-            this.backgroundMusic.resume();
+        const resumeMusic = this._audio?.music;
+        if (resumeMusic && resumeMusic.isPaused) {
+            resumeMusic.resume();
         }
         
         // Resume timers
@@ -1394,7 +1061,6 @@ export default class GameScene extends Phaser.Scene {
         // Hide pause dialog
         this.hidePauseDialog();
         
-        console.log('Game resumed');
     }
     
     showPauseDialog() {
@@ -1611,8 +1277,6 @@ export default class GameScene extends Phaser.Scene {
     }
     
     createAnimatedZombieAnimations() {
-        console.log('Creating animated zombie animations...');
-        
         // Appear animation (11 frames) - plays once when spawning
         const appearFrames = [];
         for (let i = 1; i <= 11; i++) {
@@ -1673,7 +1337,6 @@ export default class GameScene extends Phaser.Scene {
             repeat: 0 // Play once
         });
         
-        console.log('Animated zombie animations created successfully');
     }
     
 }

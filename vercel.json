@@ -1,6 +1,5 @@
 {
   "version": 2,
-  "name": "banana-pajama-zombie-shooter",
   "buildCommand": "npm install --prefix server && npm install --prefix client && npm run build --prefix client",
   "outputDirectory": "client/dist",
   "devCommand": "npm run dev --prefix client",
