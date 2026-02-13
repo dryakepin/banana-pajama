@@ -74,42 +74,6 @@ const hideLoadingScreen = () => {
     }
 };
 
-// Unlock audio context on first user interaction
-const unlockAudioContext = () => {
-    if (!game || !game.sound) {
-        return;
-    }
-    
-    // Try to unlock WebAudio context if it exists
-    if (game.sound.context) {
-        if (game.sound.context.state === 'suspended') {
-            const resumePromise = game.sound.context.resume();
-            
-            // For iOS: Also try to start a dummy sound to unlock
-            if (isiOS) {
-                // iOS requires synchronous play in user interaction handler
-                // Create a silent audio element to unlock
-                try {
-                    const audio = new Audio();
-                    audio.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
-                    audio.volume = 0.01;
-                    const playPromise = audio.play();
-                    if (playPromise) {
-                        playPromise.then(() => {
-                            audio.pause();
-                            audio.remove();
-                        }).catch(() => {});
-                    }
-                } catch (e) {
-                    // Silent audio unlock failed - expected on some browsers
-                }
-            }
-            
-            resumePromise.then(() => {}).catch(() => {});
-        }
-    }
-};
-
 // Initialize the game
 const game = new Phaser.Game(config);
 
@@ -579,36 +543,13 @@ if (isMobile) {
     // Set initial viewport height
     setViewportHeight();
     
-    // Request fullscreen and unlock audio on first user interaction
+    // Request fullscreen on first user interaction
+    // Note: Audio unlock is handled by Phaser's built-in mechanism (sound.locked / 'unlocked' event)
     let fullscreenRequested = false;
     const requestFullscreenOnce = () => {
         if (!fullscreenRequested) {
             fullscreenRequested = true;
-            
-            // Unlock audio context on first user interaction - CRITICAL for iOS
-            // Must be called synchronously in user interaction handler
-            unlockAudioContext();
-            
-            // For iOS: Also try to unlock audio by creating a dummy sound
-            // This must happen synchronously in the user interaction handler
-            if (isiOS && game && game.sound) {
-                try {
-                    // Try to create and play a very short silent sound to unlock audio
-                    // This must be done synchronously in the click/touch handler
-                    // Note: Sound may not be loaded yet, but we'll try anyway
-                    if (game.cache && game.cache.audio && game.cache.audio.exists('zombie-theme')) {
-                        const testSound = game.sound.add('zombie-theme', { volume: 0.01 });
-                        testSound.play();
-                        setTimeout(() => {
-                            testSound.stop();
-                            testSound.destroy();
-                        }, 100);
-                    }
-                } catch (e) {
-                    // Audio unlock attempt failed - non-critical
-                }
-            }
-            
+
             if (isAndroid) {
                 
                 // Chrome Mobile needs special handling

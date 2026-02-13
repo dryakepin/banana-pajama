@@ -1,6 +1,6 @@
 {
   "name": "banana-pajama-client",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "Banana Pajama Zombie Shooter - Frontend Game Client",
   "main": "src/index.js",
   "scripts": {
