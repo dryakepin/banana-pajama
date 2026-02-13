@@ -141,11 +141,11 @@ export default class HighScoreScene extends Phaser.Scene {
         }
 
         // Headers (outside scroll container, fixed position) - compact on mobile
-        const rankX = this.isMobile ? width * 0.08 : width / 2 - 200;
-        const playerX = this.isMobile ? width * 0.23 : width / 2 - 120;
-        const scoreX = this.isMobile ? width * 0.55 : width / 2 + 50;
-        const timeX = this.isMobile ? width * 0.70 : width / 2 + 130;
-        const killsX = this.isMobile ? width * 0.85 : width / 2 + 220;
+        const rankX = this.isMobile ? width * 0.08 : width / 2 - 250;
+        const playerX = this.isMobile ? width * 0.23 : width / 2 - 170;
+        const scoreX = this.isMobile ? width * 0.55 : width / 2 + 80;
+        const timeX = this.isMobile ? width * 0.70 : width / 2 + 170;
+        const killsX = this.isMobile ? width * 0.85 : width / 2 + 260;
 
         this.add.text(rankX, headerY, 'RANK', {
             fontSize: headerSize,
@@ -203,11 +203,11 @@ export default class HighScoreScene extends Phaser.Scene {
             }
 
             // Use responsive positions from headers
-            const rankX = this.isMobile ? width * 0.08 : width / 2 - 200;
-            const playerX = this.isMobile ? width * 0.23 : width / 2 - 120;
-            const scoreX = this.isMobile ? width * 0.55 : width / 2 + 50;
-            const timeX = this.isMobile ? width * 0.70 : width / 2 + 130;
-            const killsX = this.isMobile ? width * 0.85 : width / 2 + 220;
+            const rankX = this.isMobile ? width * 0.08 : width / 2 - 250;
+            const playerX = this.isMobile ? width * 0.23 : width / 2 - 170;
+            const scoreX = this.isMobile ? width * 0.55 : width / 2 + 80;
+            const timeX = this.isMobile ? width * 0.70 : width / 2 + 170;
+            const killsX = this.isMobile ? width * 0.85 : width / 2 + 260;
 
             // Rank - position relative to container
             const rankTextObj = this.add.text(0, 0, rankText, {
@@ -220,7 +220,7 @@ export default class HighScoreScene extends Phaser.Scene {
             this.scrollContainer.add(rankTextObj);
 
             // Player name (truncate if too long on mobile)
-            const maxNameLength = this.isMobile ? 8 : 12;
+            const maxNameLength = this.isMobile ? 8 : 20;
             const playerName = score.player_name.length > maxNameLength 
                 ? score.player_name.substring(0, maxNameLength) + '...'
                 : score.player_name;
