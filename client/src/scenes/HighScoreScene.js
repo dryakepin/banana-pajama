@@ -64,7 +64,7 @@ export default class HighScoreScene extends Phaser.Scene {
             loadingText.setStyle({ color: '#ff4444' });
         }
 
-        // Back button - more compact on mobile
+        // Back button - more compact on mobile, high depth to stay above scroll zone
         const backBtnY = this.isMobile ? height - 40 : height - 60;
         const backBtnSize = this.isMobile ? '18px' : '24px';
         const backBtn = this.add.text(width / 2, backBtnY, 'BACK TO MENU', {
@@ -75,6 +75,7 @@ export default class HighScoreScene extends Phaser.Scene {
             padding: this.isMobile ? { x: 15, y: 8 } : { x: 20, y: 10 }
         })
         .setOrigin(0.5)
+        .setDepth(2000)
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => this.returnToMenu())
         .on('pointerover', () => backBtn.setStyle({ backgroundColor: '#555555' }))
@@ -300,6 +301,7 @@ export default class HighScoreScene extends Phaser.Scene {
         const zoneCenterY = (this.maskStartY || 130) + (this.maskHeight || (height - 250)) / 2;
         const zoneHeight = this.maskHeight || (height - 250);
         const scrollZone = this.add.zone(width / 2, zoneCenterY, width, zoneHeight);
+        scrollZone.setDepth(0);
         scrollZone.setInteractive({ useHandCursor: false });
         
         // Track scrolling state

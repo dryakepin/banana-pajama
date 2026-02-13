@@ -66,11 +66,7 @@
             transform: translate3d(0, 0, 0);
             -webkit-backface-visibility: hidden;
             backface-visibility: hidden;
-            /* Handle safe areas for notched devices - but use 0 for fullscreen */
-            padding-top: 0;
-            padding-bottom: 0;
-            padding-left: env(safe-area-inset-left);
-            padding-right: env(safe-area-inset-right);
+            padding: 0;
         }
 
         /* iOS-specific fixes for fullscreen */
@@ -121,8 +117,8 @@
             transition: width 0.3s ease;
         }
         
-        /* Force landscape orientation on mobile */
-        @media screen and (max-width: 768px) {
+        /* Force landscape orientation on mobile (1024px covers all phones in landscape) */
+        @media screen and (max-width: 1024px) {
             body {
                 transform-origin: center center;
             }
@@ -170,12 +166,13 @@
                     position: fixed !important;
                     top: 0 !important;
                     left: 0 !important;
+                    border-radius: 0 !important;
                 }
             }
         }
         
         /* Desktop styles remain unchanged */
-        @media screen and (min-width: 769px) {
+        @media screen and (min-width: 1025px) {
             #game-container {
                 border: 2px solid #333;
                 border-radius: 8px;
@@ -256,7 +253,7 @@
         }
         
         /* Chrome Mobile specific overrides */
-        @media screen and (max-width: 768px) {
+        @media screen and (max-width: 1024px) {
             body.android-fullscreen {
                 /* Force full viewport usage on Chrome Mobile */
                 min-height: 100vh !important;

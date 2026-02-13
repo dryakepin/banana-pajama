@@ -75,13 +75,18 @@ export default class AudioManager {
             html5Fallback = null;
         };
 
-        // If context is ready, play immediately
-        if (!scene.sound.context || scene.sound.context.state !== 'suspended') {
+        // Determine if we need to wait for user interaction:
+        // - iOS always needs it (WebAudio context starts suspended)
+        // - Any browser with suspended WebAudio context needs it
+        const contextSuspended = scene.sound.context && scene.sound.context.state === 'suspended';
+        const needsUnlock = isiOS || contextSuspended;
+
+        if (!needsUnlock) {
             createAndPlay();
             return { get music() { return music; }, cleanup };
         }
 
-        // Context is suspended — wait for user interaction
+        // Wait for user interaction to unlock audio
         scene.input.once('pointerdown', unlock);
         if (scene.input.keyboard) {
             scene.input.keyboard.once('keydown', unlock);

@@ -53,9 +53,6 @@ const config = {
         smoothFactor: 0.2
     },
     audio: {
-        // CRITICAL: Disable WebAudio on iOS - it has major issues
-        // Force HTML5 Audio which is more reliable on iOS Safari
-        disableWebAudio: isiOS || false,
         noAudio: false
     },
     dom: {

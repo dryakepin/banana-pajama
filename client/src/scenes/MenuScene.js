@@ -18,8 +18,8 @@ export default class MenuScene extends Phaser.Scene {
         const { width, height } = this.cameras.main;
 
         // Loading screen background image
-        const loadingScreen = this.add.image(width / 2, height / 2, 'loading_screen');
-        loadingScreen.setDisplaySize(width, height);
+        this.loadingScreen = this.add.image(width / 2, height / 2, 'loading_screen');
+        this.loadingScreen.setDisplaySize(width, height);
 
         const buttonStyle = {
             fontSize: '24px',
@@ -29,24 +29,51 @@ export default class MenuScene extends Phaser.Scene {
             padding: { x: 20, y: 10 }
         };
 
-        const newGameBtn = this.add.text(width / 2, height * 0.7, 'NEW GAME', buttonStyle)
+        this.newGameBtn = this.add.text(width / 2, height * 0.7, 'NEW GAME', buttonStyle)
             .setOrigin(0.5)
             .setInteractive({ useHandCursor: true })
             .on('pointerdown', () => this.startGame())
-            .on('pointerover', () => newGameBtn.setStyle({ backgroundColor: '#555555' }))
-            .on('pointerout', () => newGameBtn.setStyle({ backgroundColor: '#333333' }));
+            .on('pointerover', () => this.newGameBtn.setStyle({ backgroundColor: '#555555' }))
+            .on('pointerout', () => this.newGameBtn.setStyle({ backgroundColor: '#333333' }));
 
-        const highScoresBtn = this.add.text(width / 2, height * 0.8, 'HIGH SCORES', buttonStyle)
+        this.highScoresBtn = this.add.text(width / 2, height * 0.8, 'HIGH SCORES', buttonStyle)
             .setOrigin(0.5)
             .setInteractive({ useHandCursor: true })
             .on('pointerdown', () => this.showHighScores())
-            .on('pointerover', () => highScoresBtn.setStyle({ backgroundColor: '#555555' }))
-            .on('pointerout', () => highScoresBtn.setStyle({ backgroundColor: '#333333' }));
+            .on('pointerover', () => this.highScoresBtn.setStyle({ backgroundColor: '#555555' }))
+            .on('pointerout', () => this.highScoresBtn.setStyle({ backgroundColor: '#333333' }));
 
         this.createScrollingText(width, height);
 
+        // Handle viewport resize (mobile browsers changing UI, orientation, etc.)
+        this.scale.on('resize', this.handleResize, this);
+
         // Start background music via shared manager
         this._audio = AudioManager.playMusic(this, 'zombie-theme', { volume: 0.5 });
+    }
+
+    handleResize(gameSize) {
+        const width = gameSize.width;
+        const height = gameSize.height;
+
+        // Reposition and resize background
+        if (this.loadingScreen) {
+            this.loadingScreen.setPosition(width / 2, height / 2);
+            this.loadingScreen.setDisplaySize(width, height);
+        }
+
+        // Reposition buttons
+        if (this.newGameBtn) {
+            this.newGameBtn.setPosition(width / 2, height * 0.7);
+        }
+        if (this.highScoresBtn) {
+            this.highScoresBtn.setPosition(width / 2, height * 0.8);
+        }
+
+        // Reposition scroll text
+        if (this.scrollingText) {
+            this.scrollingText.y = height * 0.95;
+        }
     }
 
     createScrollingText(width, height) {
@@ -89,6 +116,7 @@ export default class MenuScene extends Phaser.Scene {
         if (this._audio) this._audio.cleanup();
         this.sound.stopAll();
         this.cleanupTweens();
+        this.scale.off('resize', this.handleResize, this);
         this.scene.start('GameScene');
     }
 
@@ -96,6 +124,7 @@ export default class MenuScene extends Phaser.Scene {
         if (this._audio) this._audio.cleanup();
         this.sound.stopAll();
         this.cleanupTweens();
+        this.scale.off('resize', this.handleResize, this);
         this.scene.start('HighScoreScene');
     }
 }
