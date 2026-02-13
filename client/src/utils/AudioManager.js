@@ -35,33 +35,15 @@ export default class AudioManager {
             }
         };
 
-        const cleanup = () => {
-            cleaned = true;
-            // Remove pending unlock listeners so they don't fire after scene switch
-            scene.input.off('pointerdown', unlock);
-            scene.input.keyboard?.off('keydown', unlock);
-            AudioManager._cleanup(music, html5Fallback);
-            music = null;
-            html5Fallback = null;
-        };
-
-        // If context is ready, play immediately
-        if (!scene.sound.context || scene.sound.context.state !== 'suspended') {
-            createAndPlay();
-            return { get music() { return music; }, cleanup };
-        }
-
-        // Context is suspended — wait for user interaction
+        // Define unlock handler before cleanup so cleanup can reference it
         const unlock = () => {
             if (cleaned) return;
             if (isiOS) {
-                // iOS: resume context and play synchronously in the interaction handler
                 if (scene.sound.context && scene.sound.context.state === 'suspended') {
                     scene.sound.context.resume().catch(() => {});
                 }
                 createAndPlay();
 
-                // Verify after a tick and retry once if needed
                 setTimeout(() => {
                     if (!cleaned && music && !music.isPlaying) {
                         try {
@@ -84,6 +66,22 @@ export default class AudioManager {
             scene.input.keyboard?.off('keydown', unlock);
         };
 
+        const cleanup = () => {
+            cleaned = true;
+            scene.input.off('pointerdown', unlock);
+            scene.input.keyboard?.off('keydown', unlock);
+            AudioManager._cleanup(music, html5Fallback);
+            music = null;
+            html5Fallback = null;
+        };
+
+        // If context is ready, play immediately
+        if (!scene.sound.context || scene.sound.context.state !== 'suspended') {
+            createAndPlay();
+            return { get music() { return music; }, cleanup };
+        }
+
+        // Context is suspended — wait for user interaction
         scene.input.once('pointerdown', unlock);
         if (scene.input.keyboard) {
             scene.input.keyboard.once('keydown', unlock);
