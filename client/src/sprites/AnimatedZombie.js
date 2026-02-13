@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import SoundEffects from '../utils/SoundEffects.js';
 
 export default class AnimatedZombie extends Phaser.Physics.Arcade.Sprite {
     constructor(scene, x, y) {
@@ -294,6 +295,7 @@ export default class AnimatedZombie extends Phaser.Physics.Arcade.Sprite {
         }
         
         // Deal damage immediately (could be delayed to specific frame if desired)
+        SoundEffects.playZombieAttack();
         this.scene.damagePlayer(this.damage);
     }
     
@@ -321,22 +323,24 @@ export default class AnimatedZombie extends Phaser.Physics.Arcade.Sprite {
     
     die() {
         if (this.isDying) return;
-        
+
+        SoundEffects.playZombieDeath('animated');
+
         console.log('Animated zombie dying');
         this.isDying = true;
         this.isActive = false;
         this.animationState = 'dying';
-        
+
         // Stop all movement
         if (this.body) {
             this.setVelocity(0, 0);
         }
-        
+
         // Play death animation
         if (this.anims) {
             this.play('zombie4-die');
         }
-        
+
         // Add score to player immediately
         this.scene.addScore(this.scoreValue);
         this.scene.addZombieKill();

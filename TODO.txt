@@ -4,15 +4,14 @@ Updated: 2026-02-13
 ## HIGH PRIORITY - Production Issues
 
 ### Performance & Optimization
-- [ ] Optimize bundle size (currently 1.2MB with warnings)
-- [ ] Implement proper asset compression for production
-- [ ] Add CDN/caching strategy for static assets
+- [x] Optimize bundle size (code splitting, content hashing, Terser)
+- [x] Implement proper asset compression for production
+- [x] Add CDN/caching strategy for static assets
 - [ ] Monitor memory usage during extended gameplay
 
 ### Infrastructure & Deployment
 - [ ] Set up proper domain name (no more changing IP addresses)
 - [ ] Configure SSL certificate for domain
-- [ ] Deploy to AWS EU region
 - [ ] Configure load balancer for production traffic
 - [ ] Implement proper monitoring and alerting
 - [ ] Set up automated deployment pipeline
@@ -21,7 +20,7 @@ Updated: 2026-02-13
 ## MEDIUM PRIORITY - Features & Improvements
 
 ### Game Features
-- [ ] In-game sounds: zombie spawn, zombie death, zombie growl, player death, shot
+- [x] In-game sounds: zombie spawn, zombie death, zombie growl, player death, shot (ZZFX synthesized)
 - [ ] Add keyboard shortcuts help screen
 
 ### Technical Debt

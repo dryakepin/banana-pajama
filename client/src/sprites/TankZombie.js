@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import SoundEffects from '../utils/SoundEffects.js';
 
 export default class TankZombie extends Phaser.Physics.Arcade.Sprite {
     constructor(scene, x, y) {
@@ -228,8 +229,7 @@ export default class TankZombie extends Phaser.Physics.Arcade.Sprite {
         // Screen shake for powerful tank attack
         this.scene.cameras.main.shake(300, 0.02);
         
-        // TODO: Add tank attack sound effect
-        // this.scene.sound.play('tankZombieAttack');
+        SoundEffects.playZombieAttack();
     }
     
     takeDamage(damage) {
@@ -258,33 +258,35 @@ export default class TankZombie extends Phaser.Physics.Arcade.Sprite {
     
     die() {
         if (this.isDead) return;
-        
+
+        SoundEffects.playZombieDeath('tank');
+
         this.isDead = true;
         this.isActive = false;
-        
+
         // Stop movement
         this.setVelocity(0, 0);
-        
+
         // Death animation/effect - tank zombie has more dramatic death
         this.setTint(0x333333); // Darker gray out
         this.setAlpha(0.8);
-        
+
         // Tank zombie explodes with screen shake
         this.scene.cameras.main.shake(400, 0.03);
-        
+
         // Add score to player (higher score for tank)
         this.scene.addScore(this.scoreValue);
-        
+
         // Track zombie kill
         this.scene.addZombieKill();
-        
+
         // Tank zombies have better power-up drops based on updated spec
         const dropChance = Math.random();
         if (dropChance < 0.05) {
             // 5% chance for healing
             this.scene.spawnPowerUp(this.x, this.y, 'healing');
         } else if (dropChance < 0.20) {
-            // 15% chance for invincibility  
+            // 15% chance for invincibility
             this.scene.spawnPowerUp(this.x, this.y, 'invincibility');
         } else if (dropChance < 0.24) {
             // 4% chance for kill all (rare)
@@ -293,17 +295,11 @@ export default class TankZombie extends Phaser.Physics.Arcade.Sprite {
             // 10% chance for dual shot
             this.scene.spawnPowerUp(this.x, this.y, 'dualShot');
         }
-        
+
         // Remove after longer delay (tank is bigger, takes longer to disappear)
         this.scene.time.delayedCall(800, () => {
             this.destroy();
         });
-        
-        // TODO: Add tank death sound effect
-        // this.scene.sound.play('tankZombieDeath');
-        
-        // TODO: Add explosion particle effect
-        // this.scene.add.particles(this.x, this.y, 'explosion', {...});
     }
     
     // Reset tank zombie for object pooling

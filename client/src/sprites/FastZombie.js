@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import SoundEffects from '../utils/SoundEffects.js';
 
 export default class FastZombie extends Phaser.Physics.Arcade.Sprite {
     constructor(scene, x, y) {
@@ -238,8 +239,7 @@ export default class FastZombie extends Phaser.Physics.Arcade.Sprite {
         // Quick screen shake for fast zombie attack
         this.scene.cameras.main.shake(200, 0.015);
         
-        // TODO: Add fast zombie attack sound effect
-        // this.scene.sound.play('fastZombieAttack');
+        SoundEffects.playZombieAttack();
     }
     
     takeDamage(damage) {
@@ -271,23 +271,25 @@ export default class FastZombie extends Phaser.Physics.Arcade.Sprite {
     
     die() {
         if (this.isDead) return;
-        
+
+        SoundEffects.playZombieDeath('fast');
+
         this.isDead = true;
         this.isActive = false;
-        
+
         // Stop movement
         this.setVelocity(0, 0);
-        
+
         // Death animation/effect
         this.setTint(0x444444); // Dark gray out
         this.setAlpha(0.6);
-        
+
         // Add score to player (medium score)
         this.scene.addScore(this.scoreValue);
-        
+
         // Track zombie kill
         this.scene.addZombieKill();
-        
+
         // Fast zombie power-up drops (medium drop rates)
         const dropChance = Math.random();
         if (dropChance < 0.08) {
@@ -300,17 +302,11 @@ export default class FastZombie extends Phaser.Physics.Arcade.Sprite {
             // 10% chance for point boost
             this.scene.spawnPowerUp(this.x, this.y, 'pointBoost');
         }
-        
+
         // Remove quickly (fast zombie disappears fast)
         this.scene.time.delayedCall(300, () => {
             this.destroy();
         });
-        
-        // TODO: Add fast zombie death sound effect
-        // this.scene.sound.play('fastZombieDeath');
-        
-        // TODO: Add speed trail particle effect
-        // this.scene.add.particles(this.x, this.y, 'speedTrail', {...});
     }
     
     // Reset fast zombie for object pooling

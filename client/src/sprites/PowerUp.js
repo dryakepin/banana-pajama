@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import SoundEffects from '../utils/SoundEffects.js';
 
 export default class PowerUp extends Phaser.Physics.Arcade.Sprite {
     constructor(scene, x, y, powerUpType) {
@@ -146,8 +147,7 @@ export default class PowerUp extends Phaser.Physics.Arcade.Sprite {
         // Apply power-up effect based on type
         this.applyEffect(player);
         
-        // TODO: Play pickup sound
-        // this.scene.sound.play('powerup-pickup');
+        SoundEffects.playPowerupPickup();
         
         // Visual pickup effect (quick scale up then destroy)
         this.scene.tweens.add({

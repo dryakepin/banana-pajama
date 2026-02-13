@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import SoundEffects from '../utils/SoundEffects.js';
 
 export default class BasicZombie extends Phaser.Physics.Arcade.Sprite {
     constructor(scene, x, y) {
@@ -202,8 +203,7 @@ export default class BasicZombie extends Phaser.Physics.Arcade.Sprite {
             }
         });
         
-        // TODO: Add attack sound effect
-        // this.scene.sound.play('zombieAttack');
+        SoundEffects.playZombieAttack();
     }
     
     takeDamage(damage) {
@@ -229,23 +229,25 @@ export default class BasicZombie extends Phaser.Physics.Arcade.Sprite {
     
     die() {
         if (this.isDead) return;
-        
+
+        SoundEffects.playZombieDeath('basic');
+
         this.isDead = true;
         this.isActive = false;
-        
+
         // Stop movement
         this.setVelocity(0, 0);
-        
+
         // Death animation/effect
         this.setTint(0x666666); // Gray out
         this.setAlpha(0.7);
-        
+
         // Add score to player
         this.scene.addScore(this.scoreValue);
-        
+
         // Track zombie kill
         this.scene.addZombieKill();
-        
+
         // Basic zombie power-up drops based on updated spec
         const dropChance = Math.random();
         if (dropChance < 0.15) {
@@ -255,17 +257,11 @@ export default class BasicZombie extends Phaser.Physics.Arcade.Sprite {
             // 10% chance for dual shot (from all zombie types)
             this.scene.spawnPowerUp(this.x, this.y, 'dualShot');
         }
-        
+
         // Remove after short delay
         this.scene.time.delayedCall(500, () => {
             this.destroy();
         });
-        
-        // TODO: Add death sound effect
-        // this.scene.sound.play('zombieDeath');
-        
-        // TODO: Add death particle effect
-        // this.scene.add.particles(this.x, this.y, 'blood', {...});
     }
     
     // Reset zombie for object pooling

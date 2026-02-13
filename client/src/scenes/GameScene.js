@@ -8,6 +8,7 @@ import PowerUp from '../sprites/PowerUp.js';
 import TileMap from '../world/TileMap.js';
 import VirtualJoystick from '../ui/VirtualJoystick.js';
 import AudioManager from '../utils/AudioManager.js';
+import SoundEffects from '../utils/SoundEffects.js';
 
 export default class GameScene extends Phaser.Scene {
     constructor() {
@@ -214,6 +215,9 @@ export default class GameScene extends Phaser.Scene {
         this.physics.add.overlap(this.bullets, this.animatedZombies, this.bulletHitAnimatedZombie, null, this);
         this.physics.add.overlap(this.player, this.powerUps, this.playerPickupPowerUp, null, this);
 
+        // Initialize synthesized sound effects
+        SoundEffects.init(this);
+
         // Hide default cursor and use custom crosshair (restored in gameOver/exit)
         this.input.setDefaultCursor('none');
 
@@ -285,6 +289,7 @@ export default class GameScene extends Phaser.Scene {
         // ESC to return to menu
         this.input.keyboard.on('keydown-ESC', () => {
             this.input.setDefaultCursor('default');
+            SoundEffects.cleanup();
             if (this._audio) this._audio.cleanup();
             this.sound.stopAll();
             this.scene.start('MenuScene');
@@ -519,9 +524,8 @@ export default class GameScene extends Phaser.Scene {
         
         // Update last shot time
         this.lastShotTime = currentTime;
-        
-        // Add shooting sound effect here later
-        // this.sound.play('gunshot');
+
+        SoundEffects.playGunshot();
     }
     
     // Check if there's a clear line of sight between two points
@@ -841,15 +845,18 @@ export default class GameScene extends Phaser.Scene {
         }
         
         this.hp -= damage;
-        
+
+        SoundEffects.playPlayerDamage();
+
         // Clamp HP to 0-100 range
         this.hp = Math.max(0, this.hp);
-        
+
         // Check for game over
         if (this.hp <= 0) {
+            SoundEffects.playPlayerDeath();
             this.gameOver();
         }
-        
+
         // Visual feedback for player damage
         this.cameras.main.shake(200, 0.01);
     }
@@ -864,7 +871,7 @@ export default class GameScene extends Phaser.Scene {
 
     startBackgroundMusic() {
         this.sound.stopAll();
-        this._audio = AudioManager.playMusic(this, 'zombie-game', { volume: 0.4 });
+        this._audio = AudioManager.playMusic(this, 'zombie-game', { volume: 0.15 });
     }
 
     gameOver() {
@@ -891,7 +898,8 @@ export default class GameScene extends Phaser.Scene {
         // Restore default cursor
         this.input.setDefaultCursor('default');
 
-        // Stop all game audio
+        // Stop all game audio and sound effects
+        SoundEffects.cleanup();
         if (this._audio) this._audio.cleanup();
         this.sound.stopAll();
 
@@ -986,7 +994,8 @@ export default class GameScene extends Phaser.Scene {
     }
     
     killAllZombies() {
-        
+        SoundEffects.playKillAllExplosion();
+
         // Kill all basic zombies
         this.zombies.children.entries.forEach(zombie => {
             if (zombie.active && !zombie.isDead) {
@@ -1125,6 +1134,7 @@ export default class GameScene extends Phaser.Scene {
         menuButton.setInteractive({ useHandCursor: true });
         menuButton.on('pointerdown', () => {
             this.input.setDefaultCursor('default');
+            SoundEffects.cleanup();
             if (this._audio) this._audio.cleanup();
             this.sound.stopAll();
             this.scene.start('MenuScene');

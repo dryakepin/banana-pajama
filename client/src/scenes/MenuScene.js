@@ -49,7 +49,7 @@ export default class MenuScene extends Phaser.Scene {
         this.scale.on('resize', this.handleResize, this);
 
         // Start background music via shared manager
-        this._audio = AudioManager.playMusic(this, 'zombie-theme', { volume: 0.5 });
+        this._audio = AudioManager.playMusic(this, 'zombie-theme', { volume: 0.2 });
     }
 
     handleResize(gameSize) {
