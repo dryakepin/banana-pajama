@@ -5,11 +5,11 @@ yarn-debug.log*
 yarn-error.log*
 
 # Environment variables
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+# Catch-all so new .env variants are never committed by accident,
+# with example/template files explicitly re-included.
+.env*
+!.env.example
+!.env.*.example
 
 # Logs
 logs
@@ -56,9 +56,6 @@ Thumbs.db
 *.sqlite
 *.db
 
-# Docker
-.dockerignore
-
 # Deployment
 .vercel
 .netlify
@@ -69,3 +66,4 @@ Thumbs.db
 
 # Claude Code local settings
 .claude/settings.local.json
+
