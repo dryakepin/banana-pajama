@@ -62,9 +62,18 @@ services:
     #   docker-compose up server client
     # When using local database, start with profile:
     #   docker-compose --profile local-db up
+    #
+    # required: false is load-bearing. `database` sits behind the local-db
+    # profile, so without the profile it is not part of the project at all and
+    # an unconditional depends_on makes compose reject the whole file:
+    #   service "server" depends on undefined service "database"
+    # That broke every compose command, profile or not. With required: false
+    # the dependency still gates startup when the profile IS active, and is
+    # simply ignored when it is not. See INFRA-1 in CODEBASE_REVIEW.md.
     depends_on:
       database:
         condition: service_healthy
+        required: false
     healthcheck:
       test: ["CMD", "node", "healthcheck.js"]
       interval: 30s

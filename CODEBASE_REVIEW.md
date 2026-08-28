@@ -1,9 +1,9 @@
 # Codebase Review — Banana Pajama Zombie Shooter
 
-**Date:** 2026-08-28 (revised 2026-08-28 after remediating SEC-1, SEC-4, DB-1 and DATA-1)
+**Date:** 2026-08-28 (revised 2026-08-28 after remediating SEC-1, SEC-4, DB-1, DB-4, DATA-1 and INFRA-1)
 **Reviewed at:** branch `dryakepin/porto` (base `origin/main`, HEAD `46788a1`)
 **Scope:** full repository — client (Phaser), `server/` (Express), `api/` (Vercel functions), `database/`, `docker/`, `nginx/`, `scripts/`, docs
-**Mostly analysis.** Findings are analysis only except SEC-1, SEC-4, DB-1 and DATA-1, whose remediations are recorded inline below.
+**Mostly analysis.** Findings are analysis only except SEC-1, SEC-4, DB-1, DB-4, DATA-1 and INFRA-1, whose remediations are recorded inline below.
 
 ---
 
@@ -15,11 +15,11 @@ Headline items:
 
 - ~~**A live database password is committed to git and pushed to `origin/main`**~~ (`DEBUG_CHECKLIST.md:66`). **Rotated 2026-08-28 — see SEC-1.**
 - ~~**`scripts/migrate-supabase.js` silently discards half of the schema**~~, including both `CREATE TABLE`s and the `high_scores` RLS lockdown. It reported success while doing almost nothing. **Fixed 2026-08-28 — see DB-1.**
-- **`docker compose` does not run at all** — the compose file is invalid without an explicit profile flag that no script or doc passes.
+- ~~**`docker compose` does not run at all**~~ — the compose file was invalid without an explicit profile flag that no script or doc passed. **Fixed 2026-08-28 — see INFRA-1.**
 - **A gameplay bug produces invulnerable zombies.** Once a zombie group hits its `maxSize`, new zombies are created into the scene but silently rejected from the group, so bullets pass through them forever.
 - **Zero tests**, no lint config, and both `npm test` and `npm run lint` are documented but non-functional.
 
-Counts: **6 critical (P0)** — 2 resolved — **11 high (P1)**, **16 medium (P2)** — 2 resolved — **11 low (P3)**.
+Counts: **6 critical (P0)** — 3 resolved — **11 high (P1)**, **16 medium (P2)** — 2 resolved — **11 low (P3)**.
 
 ### Severity legend
 
@@ -181,7 +181,7 @@ At difficulty level 10 (5 minutes in) the speed multiplier is 1.25. An animated 
 
 **Fix:** Store `baseSpeed` / `baseMaxHealth` on construction and have `reset()` restore from those before the scene applies scaling. Better: derive the scaled values from base × current multiplier rather than mutating in place.
 
-### INFRA-1 · `docker compose` is invalid — local development is broken
+### INFRA-1 · `docker compose` is invalid — local development is broken — ✅ RESOLVED 2026-08-28
 **`docker/docker-compose.yml:6-8, 65-67`**
 
 The `database` service is gated behind `profiles: [local-db]`, but `server` still declares an unconditional hard dependency on it:
@@ -206,6 +206,34 @@ Every compose command fails unless `--profile local-db` is passed. Consequently:
 - `README.md` / `QUICK_START.md` instructions for `docker-compose up -d` are broken.
 
 **Fix:** Make the dependency conditional — either put `server`'s `depends_on` behind the same profile, or drop `condition: service_healthy` and let the app retry its DB connection (which `server/config/database.js` is already structured to tolerate). Then update `deploy-local.sh` and the docs to pass the profile.
+
+#### Resolution (2026-08-28)
+
+Neither suggested option was needed. Compose has a first-class answer — `required: false` on the dependency (Compose spec, v2.20+), which keeps `condition: service_healthy` meaningful when the profile *is* active and ignores the dependency when it is not. That is one line, and it preserves the startup ordering the original author wanted.
+
+```yaml
+depends_on:
+  database:
+    condition: service_healthy
+    required: false
+```
+
+Before and after, Docker Compose v2.34.0:
+
+| | no profile (Supabase mode) | `--profile local-db` |
+|---|---|---|
+| **Before** | `service "server" depends on undefined service "database": invalid compose project` | OK |
+| **After** | OK | OK |
+
+**`scripts/deploy-local.sh`** sets `export COMPOSE_PROFILES=local-db` once near the top rather than adding `--profile` to each of its fifteen call sites. The script drives the full stack — it calls `exec -T database pg_isready` — so it always needs the profile, and a single export also covers the invocations that use `-f docker/docker-compose.yml` instead of `cd docker`. Threading the flag through by hand is how it went missing originally. The echoed "Quick commands" help text does spell out `--profile local-db`, since humans copy those.
+
+Docs updated where the full stack is meant: `README.md` (quickstart and Docker section) and `CLAUDE.md`. The Supabase-mode invocations (`docker-compose up server client` in `README.md` and `docs/SUPABASE_DEPLOYMENT.md`) were already correct and now actually work.
+
+**Verified by running it, not just by `config`.** `docker compose --profile local-db up -d --build` brought up all four services; `database` reached healthy, `server` waited for it and then reported healthy, client returned 200 on :8080 and Adminer 200 on :8081. `./scripts/deploy-local.sh status` lists all four. `docker compose --dry-run up server client` (no profile) is likewise accepted.
+
+**One thing checked and cleared along the way.** `server/index.js:1` calls `dotenv.config()`, and the compose file bind-mounts `../server:/app` — so the host's `server/.env`, which holds live production Supabase credentials, is visible inside the "local" container. It does *not* redirect the local stack to production: compose sets `DATABASE_URL: ${DATABASE_URL:-}`, dotenv will not overwrite a key already present in `process.env`, and `server/config/database.js` only consults `DATABASE_URL` (not `POSTGRES_URL`, unlike `api/lib/db.js`). Confirmed at runtime — the server logged `Database connected successfully (local)` and served the local volume's 20 dev rows rather than production's 41.
+
+That safety is incidental rather than designed, and it is one exported variable away from breaking: a developer with `DATABASE_URL` set in their shell gets a "local" stack silently pointed at production. Mounting real credentials into a development container is worth removing on its own merits — but it is a distinct problem from this finding, and is not fixed here.
 
 ---
 

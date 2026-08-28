@@ -308,8 +308,8 @@ LIMIT 50;
 
 **Local Development**:
 ```bash
-# Start full stack
-cd docker && docker-compose up -d
+# Start full stack (--profile local-db starts Postgres + Adminer)
+cd docker && docker-compose --profile local-db up -d
 
 # Access points:
 # - Game: http://localhost:8080
