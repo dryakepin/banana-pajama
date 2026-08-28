@@ -1,0 +1,40 @@
+# Build context exclusions for client/Dockerfile.
+#
+# The client Dockerfile copies only src/, assets/, webpack.config.js and
+# package*.json, so this is about build-context size rather than secrets:
+# node_modules and dist/ would otherwise be uploaded to the daemon on every
+# build for no reason.
+#
+# Do not exclude src/, assets/, webpack.config.js, nginx.conf, or
+# package*.json — all are copied by the Dockerfile.
+
+# Secrets. None expected here, but the client has had .env.local in the past.
+.env*
+
+# Dependencies are reinstalled in-image by `npm ci`.
+node_modules
+npm-debug.log*
+yarn-error.log*
+
+# Build output is regenerated in-image by `npm run build`.
+dist
+build
+
+# VCS and Docker metadata
+.git
+.gitignore
+.dockerignore
+Dockerfile
+
+# Docs
+*.md
+
+# Test and coverage artifacts
+coverage
+
+# Editor and OS cruft
+.vscode
+.idea
+*.swp
+*.swo
+.DS_Store
