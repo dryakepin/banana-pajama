@@ -46,10 +46,10 @@ After updating the connection string in Vercel and redeploying:
 curl https://banana-pajama.vercel.app/api/health
 
 # Initialize database
-curl -X POST https://banana-pajama.vercel.app/api/init-db
+DATABASE_URL="<your Supabase connection string>" node scripts/migrate-supabase.js
 ```
 
-Expected: `{"success":true,"message":"Database initialized successfully"}`
+Expected: `✅ Migration completed successfully`
 
 ## Where to Get the Correct Connection String
 

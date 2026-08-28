@@ -10,7 +10,6 @@ Your project now works BOTH locally and on Vercel!
 api/
 ├── health.js           ✅ Health check endpoint
 ├── highscores.js       ✅ Get/Post high scores
-├── init-db.js          ✅ Database initialization
 ├── sessions.js         ✅ Game session tracking
 └── package.json        ✅ Dependencies installed
 
@@ -60,10 +59,12 @@ Vercel will automatically redeploy!
 After deployment, run:
 
 ```bash
-curl -X POST https://banana-pajama.vercel.app/api/init-db
+DATABASE_URL="<your Supabase connection string>" node scripts/migrate-supabase.js
 ```
 
-This creates tables and adds sample high scores.
+This creates the tables (with row-level security enabled) and adds sample high
+scores. You can also paste `database/init-supabase.sql` into the Supabase SQL
+Editor instead.
 
 ### 4️⃣ Test It!
 
@@ -132,7 +133,7 @@ Before deploying:
 - [ ] Commit and push updated `vercel.json` and `webpack.config.js`
 
 After deploying:
-- [ ] Run `/api/init-db` to create database tables
+- [ ] Run `node scripts/migrate-supabase.js` to create database tables
 - [ ] Test the game at https://banana-pajama.vercel.app
 - [ ] Submit a high score to verify database connection
 - [ ] Check browser console for any errors
@@ -153,7 +154,7 @@ After deploying:
 
 ### Database errors
 
-**Check:** Did you run `/api/init-db` to create tables?
+**Check:** Did you run `node scripts/migrate-supabase.js` to create tables?
 **Check:** Is your Supabase database connection string correct?
 
 ---

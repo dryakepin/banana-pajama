@@ -68,15 +68,16 @@ app.get('/api/health', async (req, res) => {
     }
 });
 
-// Database initialization route (development/setup only)
+// Database initialization route (setup only)
+// Vercel resolves /api/init-db to this handler now that the standalone
+// api/init-db.js function is gone, so this guard fails closed rather than
+// keying off NODE_ENV: without a matching ADMIN_KEY the route is unreachable.
+// Local Docker doesn't need it — the postgres container runs database/init.sql
+// on first boot. Prefer `node scripts/migrate-supabase.js` for Supabase.
 app.post('/api/init-db', async (req, res) => {
-    // Block in production unless admin key is provided
     const adminKey = process.env.ADMIN_KEY;
-    if (process.env.NODE_ENV === 'production') {
-        const providedKey = req.headers['x-admin-key'];
-        if (!adminKey || providedKey !== adminKey) {
-            return res.status(403).json({ error: 'Forbidden' });
-        }
+    if (!adminKey || req.headers['x-admin-key'] !== adminKey) {
+        return res.status(403).json({ error: 'Forbidden' });
     }
 
     try {
@@ -115,6 +116,23 @@ app.post('/api/init-db', async (req, res) => {
             CREATE INDEX IF NOT EXISTS idx_high_scores_created_at ON high_scores(created_at DESC);
             CREATE INDEX IF NOT EXISTS idx_game_sessions_session_id ON game_sessions(session_id);
             CREATE INDEX IF NOT EXISTS idx_game_sessions_created_at ON game_sessions(created_at DESC);
+        `);
+
+        // Lock the tables down before any data lands in them; without this they
+        // are readable and writable by anyone holding the (public) Supabase
+        // anon key via PostgREST. See database/supabase-rls.sql.
+        await pool.query(`
+            ALTER TABLE high_scores   ENABLE ROW LEVEL SECURITY;
+            ALTER TABLE game_sessions ENABLE ROW LEVEL SECURITY;
+        `);
+        await pool.query(`
+            DO $$
+            BEGIN
+                IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+                    REVOKE ALL ON high_scores, game_sessions FROM anon, authenticated;
+                END IF;
+            END
+            $$;
         `);
 
         // Insert sample data if table is empty
