@@ -1,9 +1,9 @@
 # Codebase Review — Banana Pajama Zombie Shooter
 
-**Date:** 2026-08-28
+**Date:** 2026-08-28 (revised 2026-08-28 after remediating SEC-1)
 **Reviewed at:** branch `dryakepin/porto` (base `origin/main`, HEAD `46788a1`)
 **Scope:** full repository — client (Phaser), `server/` (Express), `api/` (Vercel functions), `database/`, `docker/`, `nginx/`, `scripts/`, docs
-**Nothing was changed.** This is analysis only.
+**No application code was changed.** The findings are analysis only; the sole exception is SEC-1, whose remediation is recorded inline below.
 
 ---
 
@@ -13,13 +13,13 @@ The game works, but the repository has accumulated the classic failure modes of 
 
 Headline items:
 
-- **A live database password is committed to git and pushed to `origin/main`** (`DEBUG_CHECKLIST.md:66`). Rotate today.
+- ~~**A live database password is committed to git and pushed to `origin/main`**~~ (`DEBUG_CHECKLIST.md:66`). **Rotated 2026-08-28 — see SEC-1.**
 - **`scripts/migrate-supabase.js` silently discards half of the schema**, including both `CREATE TABLE`s and the `high_scores` RLS lockdown. It reports success while doing almost nothing.
 - **`docker compose` does not run at all** — the compose file is invalid without an explicit profile flag that no script or doc passes.
 - **A gameplay bug produces invulnerable zombies.** Once a zombie group hits its `maxSize`, new zombies are created into the scene but silently rejected from the group, so bullets pass through them forever.
 - **Zero tests**, no lint config, and both `npm test` and `npm run lint` are documented but non-functional.
 
-Counts: **6 critical (P0)**, **11 high (P1)**, **15 medium (P2)**, **11 low (P3)**.
+Counts: **6 critical (P0)** — 1 resolved — **11 high (P1)**, **16 medium (P2)**, **11 low (P3)**.
 
 ### Severity legend
 
@@ -34,18 +34,25 @@ Counts: **6 critical (P0)**, **11 high (P1)**, **15 medium (P2)**, **11 low (P3)
 
 ## P0 — Critical
 
-### SEC-1 · Live Supabase database credential committed to git
+### SEC-1 · Live Supabase database credential committed to git — ✅ RESOLVED 2026-08-28
 **`DEBUG_CHECKLIST.md:66`**
 
 A full pooler connection string for Supabase project `ldzzpasypsahpqmfyknn`, including the plaintext password, is committed in a tracked markdown file. It was introduced in commit `6f0556f` ("Add debug endpoint for connection troubleshooting") and is present on `main` and on `origin/main` (`github.com/dryakepin/banana-pajama`).
 
-The database connects as the `postgres` superuser role (see `api/lib/db.js` and the RLS comments in `database/supabase-rls.sql`), so this credential grants full read/write/DDL on the whole project — the RLS work in `database/supabase-rls.sql` provides no protection against it.
+The app connects as the `postgres` role (`api/lib/db.js`). On Supabase that is not a true superuser — `SELECT rolsuper FROM pg_roles` returns false for it, and `supabase_admin` is the only `rolsuper` — but it owns the application tables and carries `BYPASSRLS`, so the credential granted full read/write/DDL over all application data. The RLS work in `database/supabase-rls.sql` offers no protection against it.
 
-**Fix:**
-1. Rotate the Supabase database password immediately and update the Vercel env var.
-2. Remove the string from the file.
-3. Purge it from history (`git filter-repo` / BFG) and force-push, or accept that it is burned and rely on rotation.
-4. Add a secret scanner (gitleaks pre-commit hook or GitHub secret scanning) so this cannot recur.
+**Resolution (2026-08-28):**
+
+1. Password reset via the Supabase dashboard. Verified by confirming the leaked value is now *rejected* — the first reset attempt silently failed to apply, and that was only caught by explicitly testing the old credential. **Always verify a rotation by proving the old secret no longer authenticates**; a working new secret does not prove the old one is dead.
+2. All five Vercel production vars re-issued (`DATABASE_URL`, `POSTGRES_URL`, `POSTGRES_PRISMA_URL`, `POSTGRES_URL_NON_POOLING`, `POSTGRES_PASSWORD`) and redeployed; `/api/health` confirms `database: connected`.
+3. Post-incident check for persistence found nothing: 15 roles, all stock Supabase; 37 tables, all in Supabase-managed schemas except `public.high_scores` and `public.game_sessions`. This rules out a backdoor role or object. It does **not** establish whether data was read during the exposure window — that is unknowable from the database side. The only personal data at risk was leaderboard player names.
+
+**Still outstanding:**
+
+- Remove the string from `DEBUG_CHECKLIST.md` (and preferably delete that file and `DEBUG_INSTRUCTIONS.md` — see DOC-2).
+- History rewrite is optional. The repository is public, so the value should be considered permanently disclosed; rotation was the remediation, and a rewrite only reduces casual discoverability.
+- Add a secret scanner (gitleaks pre-commit hook, or enable GitHub secret scanning + push protection) so this cannot recur.
+- Consider connecting as a least-privilege role that owns only `high_scores` and `game_sessions` instead of `postgres`. That would have bounded this incident, and it is a precondition for the RLS work in `database/supabase-rls.sql` to mean anything.
 
 ### DB-1 · The Supabase migration script drops half of the schema, silently
 **`scripts/migrate-supabase.js:73-102`**
@@ -93,7 +100,7 @@ The result is a zombie that renders, pathfinds, and damages the player — but i
 - `killAllZombies()` (which iterates `group.children.entries`) never kills it;
 - nothing ever removes it.
 
-Combined with ZOM-1 below (the pool is never actually reused, so the groups fill up and stay full), this triggers reliably in any long run. The same bug applies to `bullets` (`maxSize: 50`) and `powerUps` (`maxSize: 20`): an orphan bullet is also excluded from `runChildUpdate`, so its `update()` never runs and it flies forever, accumulating.
+Combined with GAME-2 below (the pool is never actually reused, so the groups fill up and stay full), this triggers reliably in any long run. The same bug applies to `bullets` (`maxSize: 50`) and `powerUps` (`maxSize: 20`): an orphan bullet is also excluded from `runChildUpdate`, so its `update()` never runs and it flies forever, accumulating.
 
 **Fix:** Use `group.get(x, y)` (which respects `maxSize` and returns `null` when full) and bail out of the spawn when it returns `null`. Never construct-then-`add`.
 
@@ -196,11 +203,18 @@ This is not cosmetic — the two paths have **different security postures**:
 ### SEC-3 · TLS certificate verification disabled on every database connection
 **`api/lib/db.js:21-23`, `api/health.js:24-26`, `server/config/database.js:23, 48`, `scripts/migrate-supabase.js:30, 41`**
 
-`ssl: { rejectUnauthorized: false }` appears in five places, justified by a stale comment ("Supabase requires this"). It does not — Supabase publishes a downloadable CA cert, and the pooler presents a valid chain. As written, any party able to intercept the connection can present a self-signed cert and read/modify all traffic, including the superuser credentials.
+`ssl: { rejectUnauthorized: false }` appears in five places. As written, any party able to intercept the connection can present a self-signed certificate and read or modify all traffic, including the database credentials.
+
+**The app actively depends on this — demonstrated 2026-08-28.** During the SEC-1 rotation, `sslmode=require` was added to `DATABASE_URL` as a hardening step. Production immediately failed with `self-signed certificate in certificate chain`, and reverting the parameter restored service. Two things follow:
+
+1. Supabase's pooler chain is **not** validated by Node's default trust store, so the CA bundle is genuinely required — this is not a config nicety that can be flipped on.
+2. More subtly: `pg` merges connection-string SSL settings **over** the explicit config object (`ConnectionParameters` assigns the parsed `connectionString` on top of the passed config). So an `sslmode` in the URL silently overrides `ssl: { rejectUnauthorized: false }` in code. The two settings are not independent, and the URL wins.
+
+That makes the current environment fragile in a non-obvious way: `POSTGRES_URL` and `POSTGRES_PRISMA_URL` both still carry `sslmode=require` and would fail exactly the same way. They are harmless only because `api/lib/db.js:8-10` reads `DATABASE_URL` first. Remove that one variable and production breaks with an error that looks nothing like its cause.
 
 `api/health.js:24` is the worst case: it disables verification unconditionally, for *any* host, not just Supabase.
 
-**Fix:** Ship Supabase's CA bundle and use `ssl: { ca: fs.readFileSync(...), rejectUnauthorized: true }`, or at minimum stop applying the exemption to non-Supabase hosts.
+**Fix:** Download Supabase's CA certificate (Dashboard → Settings → Database → SSL Configuration), ship it with the app, and use `ssl: { ca: fs.readFileSync(...), rejectUnauthorized: true }`. Then make all connection strings agree — either all carry `sslmode=verify-full` or none carry `sslmode` at all. Do not attempt this by editing URLs alone; per point 2 it cannot work without the CA.
 
 ### SEC-4 · No `.dockerignore`, and `.gitignore` prevents one from ever being added
 **`.gitignore:53-54`, `server/Dockerfile:18`, `client/Dockerfile`**
@@ -411,6 +425,32 @@ Neither `high_scores` nor `game_sessions` has any retention policy. The rank com
 
 **Fix:** Prune to the top N (or add a scheduled cleanup), and consider a materialised rank or an approximate rank for display.
 
+### DATA-1 · No high score has been written since 2026-02-15 — score submission may have been broken for six months
+**`client/src/scenes/NameEntryScene.js:354-395`, `api/highscores.js`**
+
+Observed during the SEC-1 post-incident check:
+
+```
+count |            min             |            max
+   41 | 2025-11-01 15:46:35.234749 | 2026-02-15 15:14:24.006798
+```
+
+41 rows (10 of which are the seed data), with **nothing written in the six months to 2026-08-28**. Two readings: nobody has played, or the write path has been failing silently. The circumstantial evidence favours the second — `TODO.txt` is dated 2026-02-13, and `DEBUG_CHECKLIST.md` is a transcript of database connection failures from that same week, which is when the trail goes cold.
+
+Several findings in this report would produce exactly this symptom without anyone noticing:
+
+- **CLIENT-3** — a response-shape mismatch makes a *successful* save display "Failed to save score", so users see failure and the row is written. That would show recent rows, so it is not this.
+- **CLIENT-1 / CLIENT-2** — an unbounded `fetch` in `GameOverScene.checkHighScore()` that never resolves means `NameEntryScene` is never reached, so no submission is ever attempted. This fits.
+- A stale or malformed `DATABASE_URL` (the trailing-newline problem found in the live environment) would break writes and reads alike.
+
+**Fix:** Confirm first — play one round, take a high score, and check whether a new row lands:
+
+```sql
+SELECT player_name, score, created_at FROM high_scores ORDER BY created_at DESC LIMIT 5;
+```
+
+If nothing appears, this is a live P1 outage of the app's only persistent feature, not a P2. Diagnosis should start at `GameOverScene.checkHighScore()`, since a hung fetch there silently prevents the entry screen from ever opening.
+
 ### ARCH-2 · The entire session-analytics feature is dead
 **`api/sessions.js`, `server/index.js:261-317`, `database/*.sql` (`game_sessions`)**
 
@@ -510,25 +550,26 @@ Neither backend installs process-level handlers. Under Node 18+, an unhandled re
 ## Suggested remediation order
 
 **Today**
-1. SEC-1 — rotate the Supabase password, scrub the file. Nothing else matters until this is done.
-2. DB-1 — fix the migration script, then verify RLS is actually enabled on `high_scores` in production.
-3. INFRA-1 — make `docker compose` valid again so local development works.
+1. ~~SEC-1 — rotate the Supabase password.~~ ✅ **Done 2026-08-28.** Still open: delete the file, add a secret scanner.
+2. DATA-1 — five minutes of manual testing to establish whether high score writes are broken. If they are, this jumps to the top of the list: it is a live outage of the app's only persistent feature.
+3. DB-1 — fix the migration script, then verify RLS is actually enabled on `high_scores` in production. Note the SEC-1 rotation does **not** address this; the two are independent.
+4. INFRA-1 — make `docker compose` valid again so local development works.
 
 **This week**
-4. GAME-1, GAME-2, GAME-3 — the pooling/`maxSize` cluster. These are one coherent fix and they are the game's worst bugs.
-5. GAME-4 — state reset between rounds (cheap, and it corrupts submitted stats).
-6. SEC-4 — `.dockerignore`.
-7. DEP-1 — `npm audit fix` on both packages.
+5. GAME-1, GAME-2, GAME-3 — the pooling/`maxSize` cluster. These are one coherent fix and they are the game's worst bugs.
+6. GAME-4 — state reset between rounds (cheap, and it corrupts submitted stats).
+7. SEC-4 — `.dockerignore`.
+8. DEP-1 — `npm audit fix` on both packages.
 
 **This cycle**
-8. ARCH-1 — pick one backend and delete the other. Everything under P2 gets easier once there is one implementation to reason about.
-9. SEC-2, SEC-3, SEC-5, SEC-7 — the security-config cluster; mostly small, and mostly falls out of ARCH-1.
-10. QA-1 — eslint config plus a first test suite around the API handlers and the pure game functions. Do this before the P2 refactors, not after.
-11. PERF-1, PERF-2, PERF-4 — the three changes that actually move frame rate and API latency.
+9. ARCH-1 — pick one backend and delete the other. Everything under P2 gets easier once there is one implementation to reason about.
+10. SEC-2, SEC-3, SEC-5, SEC-7 — the security-config cluster; mostly small, and mostly falls out of ARCH-1.
+11. QA-1 — eslint config plus a first test suite around the API handlers and the pure game functions. Do this before the P2 refactors, not after.
+12. PERF-1, PERF-2, PERF-4 — the three changes that actually move frame rate and API latency.
 
 **Ongoing**
-12. The remaining P2 items (schema consolidation, dead-code removal, `GameScene` decomposition).
-13. DOC-1 — rewrite `CLAUDE.md` against reality once the above has settled. Doing it earlier means writing it twice.
+13. The remaining P2 items (schema consolidation, dead-code removal, `GameScene` decomposition).
+14. DOC-1 — rewrite `CLAUDE.md` against reality once the above has settled. Doing it earlier means writing it twice.
 
 ---
 
