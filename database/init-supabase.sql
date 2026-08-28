@@ -38,9 +38,12 @@ CREATE INDEX IF NOT EXISTS idx_high_scores_created_at ON high_scores(created_at 
 CREATE INDEX IF NOT EXISTS idx_game_sessions_session_id ON game_sessions(session_id);
 CREATE INDEX IF NOT EXISTS idx_game_sessions_created_at ON game_sessions(created_at DESC);
 
--- Insert some sample high scores for testing
--- Note: Using ON CONFLICT DO NOTHING in case samples already exist
-INSERT INTO high_scores (player_name, score, survival_time, zombies_killed) VALUES
+-- Seed data, inserted only when the table is empty.
+-- There is no unique constraint on high_scores, so ON CONFLICT DO NOTHING
+-- would never fire and re-running this file would append the ten seed rows
+-- again. The WHERE NOT EXISTS guard is what actually makes this idempotent.
+INSERT INTO high_scores (player_name, score, survival_time, zombies_killed)
+SELECT * FROM (VALUES
     ('ZombieSlayer', 200, 120, 20),
     ('BananaPro', 175, 98, 18),
     ('PajamaWarrior', 150, 85, 15),
@@ -51,7 +54,8 @@ INSERT INTO high_scores (player_name, score, survival_time, zombies_killed) VALU
     ('ZombieHunter', 55, 38, 6),
     ('LastStand', 40, 30, 4),
     ('FinalHope', 25, 22, 3)
-ON CONFLICT DO NOTHING;
+) AS seed(player_name, score, survival_time, zombies_killed)
+WHERE NOT EXISTS (SELECT 1 FROM high_scores);
 
 -- Create a view for leaderboard with additional stats
 CREATE OR REPLACE VIEW leaderboard AS

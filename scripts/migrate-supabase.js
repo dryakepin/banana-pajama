@@ -70,57 +70,63 @@ async function runMigration() {
         process.exit(1);
     }
 
-    // Split SQL into individual statements
-    // Remove comments and split by semicolons
-    const statements = sql
-        .split(';')
-        .map(stmt => stmt.trim())
-        .filter(stmt => stmt.length > 0 && !stmt.startsWith('--'));
-
-    let successCount = 0;
-    let errorCount = 0;
-
+    // Apply the whole file as ONE multi-statement query inside a transaction.
+    //
+    // Do not split on ';' here. The previous implementation did, then dropped
+    // any fragment starting with '--'; because splitting on ';' leaves each
+    // statement prefixed by its preceding comment block, that silently
+    // discarded most of the schema -- including the high_scores RLS enable --
+    // while still exiting 0. See DB-1 in CODEBASE_REVIEW.md.
+    //
+    // pg sends a parameterless query over the simple query protocol, which
+    // accepts multiple statements. Wrapping it in BEGIN/COMMIT makes the
+    // migration all-or-nothing: a fresh database is either fully provisioned
+    // or completely untouched, never half-built.
+    let client;
     try {
-        for (const statement of statements) {
-            if (statement.length === 0) continue;
+        client = await pool.connect();
 
+        await client.query('BEGIN');
+        await client.query(sql);
+        await client.query('COMMIT');
+
+        console.log(`\n✅ Migration applied: ${path.basename(SQL_FILE)}`);
+    } catch (error) {
+        if (client) {
             try {
-                await pool.query(statement);
-                successCount++;
-                console.log(`  ✓ Executed: ${statement.substring(0, 60)}...`);
-            } catch (error) {
-                // Some errors are expected (e.g., IF NOT EXISTS conflicts)
-                if (error.message.includes('already exists') || error.message.includes('duplicate')) {
-                    console.log(`  ⚠ Skipped (already exists): ${statement.substring(0, 60)}...`);
-                    successCount++;
-                } else {
-                    errorCount++;
-                    console.error(`  ✗ Error: ${error.message}`);
-                    console.error(`    Statement: ${statement.substring(0, 100)}...`);
-                }
+                await client.query('ROLLBACK');
+            } catch (rollbackError) {
+                console.error('   (rollback also failed:', rollbackError.message + ')');
             }
         }
 
-        console.log(`\n✅ Migration completed!`);
-        console.log(`   Successful: ${successCount}`);
-        if (errorCount > 0) {
-            console.log(`   Errors: ${errorCount}`);
+        console.error('\n❌ Migration failed, rolled back. Nothing was applied.');
+        console.error(`   ${error.message}`);
+        if (error.position) {
+            // Postgres reports a 1-based byte offset into the statement it
+            // choked on; turn it into a line number in the source file.
+            const line = sql.slice(0, parseInt(error.position, 10)).split('\n').length;
+            console.error(`   near ${path.basename(SQL_FILE)}:${line}`);
+        }
+        if (error.hint) {
+            console.error(`   hint: ${error.hint}`);
         }
 
-    } catch (error) {
-        console.error('\n❌ Migration failed:', error.message);
-        process.exit(1);
+        process.exitCode = 1;
     } finally {
+        if (client) client.release();
         await pool.end();
     }
 }
 
 // Run migration if called directly
 if (require.main === module) {
-    runMigration().catch(error => {
-        console.error('Fatal error:', error);
-        process.exit(1);
-    });
+    runMigration()
+        .then(() => process.exit(process.exitCode || 0))
+        .catch(error => {
+            console.error('Fatal error:', error);
+            process.exit(1);
+        });
 }
 
 module.exports = { runMigration };

@@ -1,9 +1,9 @@
 # Codebase Review — Banana Pajama Zombie Shooter
 
-**Date:** 2026-08-28 (revised 2026-08-28 after remediating SEC-1)
+**Date:** 2026-08-28 (revised 2026-08-28 after remediating SEC-1, SEC-4, DB-1 and DATA-1)
 **Reviewed at:** branch `dryakepin/porto` (base `origin/main`, HEAD `46788a1`)
 **Scope:** full repository — client (Phaser), `server/` (Express), `api/` (Vercel functions), `database/`, `docker/`, `nginx/`, `scripts/`, docs
-**No application code was changed.** The findings are analysis only; the sole exception is SEC-1, whose remediation is recorded inline below.
+**Mostly analysis.** Findings are analysis only except SEC-1, SEC-4, DB-1 and DATA-1, whose remediations are recorded inline below.
 
 ---
 
@@ -14,12 +14,12 @@ The game works, but the repository has accumulated the classic failure modes of 
 Headline items:
 
 - ~~**A live database password is committed to git and pushed to `origin/main`**~~ (`DEBUG_CHECKLIST.md:66`). **Rotated 2026-08-28 — see SEC-1.**
-- **`scripts/migrate-supabase.js` silently discards half of the schema**, including both `CREATE TABLE`s and the `high_scores` RLS lockdown. It reports success while doing almost nothing.
+- ~~**`scripts/migrate-supabase.js` silently discards half of the schema**~~, including both `CREATE TABLE`s and the `high_scores` RLS lockdown. It reported success while doing almost nothing. **Fixed 2026-08-28 — see DB-1.**
 - **`docker compose` does not run at all** — the compose file is invalid without an explicit profile flag that no script or doc passes.
 - **A gameplay bug produces invulnerable zombies.** Once a zombie group hits its `maxSize`, new zombies are created into the scene but silently rejected from the group, so bullets pass through them forever.
 - **Zero tests**, no lint config, and both `npm test` and `npm run lint` are documented but non-functional.
 
-Counts: **6 critical (P0)** — 1 resolved — **11 high (P1)**, **16 medium (P2)**, **11 low (P3)**.
+Counts: **6 critical (P0)** — 2 resolved — **11 high (P1)**, **16 medium (P2)** — 2 resolved — **11 low (P3)**.
 
 ### Severity legend
 
@@ -54,7 +54,7 @@ The app connects as the `postgres` role (`api/lib/db.js`). On Supabase that is n
 - Add a secret scanner (gitleaks pre-commit hook, or enable GitHub secret scanning + push protection) so this cannot recur.
 - Consider connecting as a least-privilege role that owns only `high_scores` and `game_sessions` instead of `postgres`. That would have bounded this incident, and it is a precondition for the RLS work in `database/supabase-rls.sql` to mean anything.
 
-### DB-1 · The Supabase migration script drops half of the schema, silently
+### DB-1 · The Supabase migration script drops half of the schema, silently — ✅ RESOLVED 2026-08-28
 **`scripts/migrate-supabase.js:73-102`**
 
 The statement splitter is:
@@ -79,7 +79,51 @@ The 8 statements that *do* run are the ones that happen not to be comment-prefix
 
 The security consequence is specific and nasty: on any database provisioned or updated with this script, `game_sessions` has RLS enabled but **`high_scores` does not**, and the `leaderboard` view still runs as definer. That is exactly the hole `database/supabase-rls.sql` was written to close. `server/index.js:74-76` explicitly recommends this script as the preferred Supabase path.
 
-**Fix:** Do not hand-roll a SQL splitter. Send the file as a single multi-statement query (`pg` supports it when no parameters are bound), or use a real migration tool (`node-pg-migrate`, `dbmate`, Supabase CLI migrations). Exit non-zero on any error. Then re-apply `database/supabase-rls.sql` to production and verify with `SELECT relname, relrowsecurity FROM pg_class WHERE relname IN ('high_scores','game_sessions')`.
+**Fix:** Do not hand-roll a SQL splitter. Send the file as a single multi-statement query (`pg` supports it when no parameters are bound), or use a real migration tool (`node-pg-migrate`, `dbmate`, Supabase CLI migrations). Exit non-zero on any error.
+
+#### Resolution (2026-08-28)
+
+**Reproduced first, against a throwaway `postgres:15` container.** The real behaviour on a genuinely empty database is worse than the static reading above: only **1 of 16 statements** executes. The other seven that survive the comment filter all depend on tables that were never created, so they error out:
+
+```
+✗ Error: relation "high_scores" does not exist
+✗ Error: relation "game_sessions" does not exist
+... 7 errors total
+✅ Migration completed!
+   Successful: 1
+   Errors: 7
+EXIT CODE = 0
+```
+
+`\dt` afterwards: `Did not find any relation named "public.*"`. An empty database, and a green checkmark.
+
+Two changes:
+
+1. **`scripts/migrate-supabase.js`** — splitter deleted. The file is now sent as one multi-statement query inside `BEGIN`/`COMMIT`, so provisioning is all-or-nothing; on error it rolls back, maps the Postgres byte offset to a line number in the `.sql` file, and exits non-zero.
+2. **`database/init-supabase.sql`** — the seed `INSERT` was guarded with `WHERE NOT EXISTS (SELECT 1 FROM high_scores)`. Its old `ON CONFLICT DO NOTHING` was decorative: `high_scores` has no unique constraint, so nothing could ever conflict, and a **second run would have appended the ten seed rows again**. Fixing the runner without fixing this would have turned a script that did nothing into a script that corrupted the leaderboard.
+
+Verified against the throwaway database:
+
+| Scenario | Result |
+|---|---|
+| Fresh database | Both tables, view, 4 indexes, RLS on `high_scores` **and** `game_sessions`, `security_invoker=on`, 0 anon grants. Exit 0. |
+| Run a second time | Still 10 seed rows, not 20. Exit 0. |
+| Induced failure (`DROP ROLE anon`) | `❌ Migration failed, rolled back. Nothing was applied.` Exit **1**. |
+
+**Production was already correct** and needed no repair — the lockdown had been applied by hand in PR #1, before this script was ever re-run:
+
+```
+    relname    | relrowsecurity          reloptions
+---------------+----------------          -----------------------
+ high_scores   | t                        {security_invoker=on}
+ game_sessions | t
+ leaderboard   | f  (view)
+anon/authenticated grants on public: 0 rows
+```
+
+So the exposure was latent rather than live: the hole would have opened the next time anyone provisioned a database with this script.
+
+**Note for whoever runs it next:** there is no `node_modules` anywhere in the repo and no root `package.json`, so `node scripts/migrate-supabase.js` cannot resolve `pg` or `dotenv` as shipped. That is not fixed here — see QA-1.
 
 ### GAME-1 · Zombies past the group cap are invulnerable and unkillable
 **`client/src/scenes/GameScene.js:866-877`**
@@ -411,12 +455,24 @@ A local Docker database and a Supabase database will not have the same schema.
 
 **Fix:** One numbered migration directory as the single source of truth; generate or delete the rest.
 
-### DB-4 · `ON CONFLICT DO NOTHING` on the seed data is a no-op
+### DB-4 · `ON CONFLICT DO NOTHING` on the seed data is a no-op — ✅ RESOLVED 2026-08-28
 **`database/init.sql:57`, `database/init-supabase.sql:54`**
 
 `high_scores` has no unique constraint other than the `SERIAL` primary key, which the insert doesn't supply — so there is nothing for `ON CONFLICT` to conflict on. Re-running either script duplicates all ten sample rows. (Given DB-1, `migrate-supabase.js` never reaches this statement at all — but it will once DB-1 is fixed.)
 
 **Fix:** Add a natural unique key, or guard the insert on `SELECT COUNT(*)` the way `server/index.js:139` already does.
+
+#### Resolution (2026-08-28)
+
+Fixed in **both** copies while resolving DB-1 — leaving one of the two behind would have been the "two of everything" problem this report opens with. Each seed block became:
+
+```sql
+INSERT INTO high_scores (player_name, score, survival_time, zombies_killed)
+SELECT * FROM (VALUES ...) AS seed(player_name, score, survival_time, zombies_killed)
+WHERE NOT EXISTS (SELECT 1 FROM high_scores);
+```
+
+Verified by running each file twice against a throwaway `postgres:15` container: `high_scores` holds **10 rows after two runs**, not 20. `database/init.sql` needed its `banana_pajama` database created first, since it still opens with a `\c` that psql cannot satisfy on a bare server — unrelated to this finding, but see DB-3.
 
 ### DB-5 · Unbounded table growth and a linear-cost rank query
 **`api/highscores.js:67-70`, `server/index.js:234-237`**
@@ -425,31 +481,76 @@ Neither `high_scores` nor `game_sessions` has any retention policy. The rank com
 
 **Fix:** Prune to the top N (or add a scheduled cleanup), and consider a materialised rank or an approximate rank for display.
 
-### DATA-1 · No high score has been written since 2026-02-15 — score submission may have been broken for six months
-**`client/src/scenes/NameEntryScene.js:354-395`, `api/highscores.js`**
+### DATA-1 · ~~Score submission may have been broken for six months~~ → a fifth of the leaderboard is duplicate rows — ✅ RESOLVED 2026-08-28
+**`client/src/scenes/NameEntryScene.js:327-400`**
 
-Observed during the SEC-1 post-incident check:
+**The original finding was wrong and is retained here as written, then corrected.** It read:
+
+> No high score has been written since 2026-02-15 — score submission may have been broken for six months. 41 rows, nothing written in the six months to 2026-08-28. Two readings: nobody has played, or the write path has been failing silently. The circumstantial evidence favours the second.
+
+It favoured the wrong one. **The write path works.** Tested end to end against production:
 
 ```
-count |            min             |            max
-   41 | 2025-11-01 15:46:35.234749 | 2026-02-15 15:14:24.006798
+POST https://banana-pajama.vercel.app/api/highscores
+{"success":true,"data":{"id":44,"player_name":"DATA1PROBE","rank":42,...}}
+HTTP 201
 ```
 
-41 rows (10 of which are the seed data), with **nothing written in the six months to 2026-08-28**. Two readings: nobody has played, or the write path has been failing silently. The circumstantial evidence favours the second — `TODO.txt` is dated 2026-02-13, and `DEBUG_CHECKLIST.md` is a transcript of database connection failures from that same week, which is when the trail goes cold.
+The row landed and was then deleted. `GET /api/health` reports `"database":"connected"`. The six-month gap is the boring explanation: the last commit to this repository is **2026-02-13** and the last score is **2026-02-15**. Development stopped and so did playing. There is no outage.
 
-Several findings in this report would produce exactly this symptom without anyone noticing:
+The lesson is the one from SEC-1, in the other direction: **a suspicious absence of data is not evidence of a broken write path.** One `curl` settled what a paragraph of circumstantial reasoning got backwards.
 
-- **CLIENT-3** — a response-shape mismatch makes a *successful* save display "Failed to save score", so users see failure and the row is written. That would show recent rows, so it is not this.
-- **CLIENT-1 / CLIENT-2** — an unbounded `fetch` in `GameOverScene.checkHighScore()` that never resolves means `NameEntryScene` is never reached, so no submission is ever attempted. This fits.
-- A stale or malformed `DATABASE_URL` (the trailing-newline problem found in the live environment) would break writes and reads alike.
+#### The real defect, found while disproving the above
 
-**Fix:** Confirm first — play one round, take a high score, and check whether a new row lands:
+Grouping the table by `(player_name, score, survival_time, zombies_killed)`:
+
+```
+       player_name       | score | copies |           first            |            last
+-------------------------+-------+--------+----------------------------+----------------------------
+ Arthur Nordlien Johnsen |  4861 |      2 | 2026-02-15 15:14:22.971617 | 2026-02-15 15:14:24.006798
+ Arthur Nordlien Johnsen |   861 |      2 | 2025-11-13 13:00:25.177577 | 2025-11-13 13:00:25.916417
+ arthur                  |   861 |      2 | 2025-11-11 19:14:47.471424 | 2025-11-11 19:14:48.940317
+ arthur                  |   600 |      2 | 2025-11-11 19:13:30.664642 | 2025-11-11 19:13:33.459810
+ 67                      |   516 |      2 | 2025-11-09 18:08:11.730517 | 2025-11-09 18:08:13.211055
+ Kåre Kjelstrøm          |   459 |      2 | 2025-11-06 13:48:32.207448 | 2025-11-06 13:48:34.356213
+ yowed                   |   182 |      3 | 2025-11-01 19:18:36.755297 | 2025-11-01 19:18:38.553431
+```
+
+**Seven groups, eight redundant rows out of 41 — about a fifth of the leaderboard.** Every duplicate lands within 0.7–2.8 s of its twin, which is human double-click cadence, not a retry loop. It is also user-visible: the current top two entries are the same run listed twice.
+
+**Root cause.** `submitScore()` had no in-flight guard, and the only input it disabled was the Phaser keyboard:
+
+```js
+this.input.keyboard.removeAllListeners();   // keyboard only
+```
+
+The SUBMIT button is a game object with its own `pointerdown` handler (`NameEntryScene.js:137`). `removeAllListeners()` on the keyboard plugin does not touch it, so the button stayed live for the entire network round-trip. A second click — or ENTER followed by a click — posted the score twice. `skipScore()` was likewise reachable mid-flight.
+
+**Fix applied:**
+
+- An `isSubmitting` guard, reset in `init()` because Phaser reuses the scene instance across rounds (the same hazard as GAME-4 — a stale flag would have locked out every later submission).
+- `setButtonsEnabled(false)` during the request: both buttons `disableInteractive()` and dim to 50 % alpha, so the state is visible rather than just enforced.
+- The guard is released on the error path, so a genuine failure is still retryable.
+
+**Verified** by driving the real `submitScore()` against a stub scene and counting POSTs:
+
+```
+PRE-FIX   POSTs after a double click: 2  ->  FAIL (duplicate row written)
+POST-FIX  POSTs after a double click: 1  ->  PASS
+```
+
+and a second scenario confirming no lockout: after a failed submit the guard holds and the buttons dim; after the 2 s recovery timer both release; the retry then reaches the network.
+
+**Not done, deliberately:** the eight existing duplicate rows are still in production. Deleting user-visible leaderboard data is the owner's call, not a side effect of a code fix. When wanted:
 
 ```sql
-SELECT player_name, score, created_at FROM high_scores ORDER BY created_at DESC LIMIT 5;
+DELETE FROM high_scores a USING high_scores b
+WHERE a.id > b.id
+  AND (a.player_name, a.score, a.survival_time, a.zombies_killed)
+    = (b.player_name, b.score, b.survival_time, b.zombies_killed);
 ```
 
-If nothing appears, this is a live P1 outage of the app's only persistent feature, not a P2. Diagnosis should start at `GameOverScene.checkHighScore()`, since a hung fetch there silently prevents the entry screen from ever opening.
+**Still open and related:** CLIENT-2 — the POST has no timeout. With the guard in place a hung `fetch` now leaves the player stuck on "Saving score…" with the buttons disabled rather than able to double-submit. That is not a regression (the old code was equally stuck, just duplicating), but `AbortSignal.timeout()` is what actually closes it.
 
 ### ARCH-2 · The entire session-analytics feature is dead
 **`api/sessions.js`, `server/index.js:261-317`, `database/*.sql` (`game_sessions`)**
