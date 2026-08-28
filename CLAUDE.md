@@ -68,7 +68,6 @@ server/
 ```
 GET  /health                 - Basic health check
 GET  /api/health            - Database connectivity check
-POST /api/init-db           - Initialize database schema
 GET  /api/highscores        - Fetch top 50 scores
 POST /api/highscores        - Submit new score (validated)
 POST /api/sessions/start    - Track game session start
@@ -198,9 +197,6 @@ Features: 30s lifetime, visual countdown, pulse effects, object pooling
 // Health & Diagnostics
 GET  /health                    // Basic uptime check
 GET  /api/health               // Database connectivity check
-
-// Database Management
-POST /api/init-db              // Initialize schema (automated)
 
 // High Score System
 GET  /api/highscores           // Get top 50 players with stats

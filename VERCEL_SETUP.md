@@ -53,9 +53,9 @@ Click **Save**.
 
 After deploying, you need to create the database tables:
 
-### Option 1: Use the API endpoint
+### Option 1: Run the migration script
 ```bash
-curl -X POST https://banana-pajama.vercel.app/api/init-db
+DATABASE_URL="<your Supabase connection string>" node scripts/migrate-supabase.js
 ```
 
 ### Option 2: Run SQL directly in Supabase
@@ -167,7 +167,6 @@ banana-pajama/
 ├── api/                        # Vercel serverless functions (production)
 │   ├── health.js              # GET /api/health
 │   ├── highscores.js          # GET/POST /api/highscores
-│   ├── init-db.js             # POST /api/init-db
 │   ├── sessions.js            # POST /api/sessions/*
 │   └── package.json           # Dependencies (pg)
 │
@@ -256,7 +255,7 @@ banana-pajama/
 **Solution**:
 Run database initialization:
 ```bash
-curl -X POST https://banana-pajama.vercel.app/api/init-db
+DATABASE_URL="<your Supabase connection string>" node scripts/migrate-supabase.js
 ```
 
 ---

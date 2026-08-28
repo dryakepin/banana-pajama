@@ -85,7 +85,7 @@ Go to: https://vercel.com/dashboard
 
 After you run:
 ```bash
-curl -X POST https://banana-pajama.vercel.app/api/init-db
+curl https://banana-pajama.vercel.app/api/health
 ```
 
 **Look for error messages in the logs that contain:**

@@ -69,6 +69,19 @@ FROM high_scores
 ORDER BY score DESC
 LIMIT 50;
 
--- Note: GRANT statements are not included here as Supabase manages permissions
--- The authenticated user running this script will have appropriate permissions
+-- Lock down the public schema so nothing here is reachable through the
+-- PostgREST API with the (public) anon key. The app connects directly as the
+-- `postgres` role, which owns these objects and has BYPASSRLS, so it is
+-- unaffected. Kept in sync with database/supabase-rls.sql.
+ALTER TABLE high_scores   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE game_sessions ENABLE ROW LEVEL SECURITY;
+
+-- Views run with the definer's rights by default and would otherwise leak
+-- high_scores straight past RLS.
+ALTER VIEW leaderboard SET (security_invoker = on);
+
+REVOKE ALL ON high_scores   FROM anon, authenticated;
+REVOKE ALL ON game_sessions FROM anon, authenticated;
+REVOKE ALL ON leaderboard   FROM anon, authenticated;
+REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM anon, authenticated;
 
