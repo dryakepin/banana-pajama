@@ -43,7 +43,8 @@ CREATE INDEX IF NOT EXISTS idx_game_sessions_session_id ON game_sessions(session
 CREATE INDEX IF NOT EXISTS idx_game_sessions_created_at ON game_sessions(created_at DESC);
 
 -- Insert some sample high scores for testing
-INSERT INTO high_scores (player_name, score, survival_time, zombies_killed) VALUES
+INSERT INTO high_scores (player_name, score, survival_time, zombies_killed)
+SELECT * FROM (VALUES
     ('ZombieSlayer', 200, 120, 20),
     ('BananaPro', 175, 98, 18),
     ('PajamaWarrior', 150, 85, 15),
@@ -54,7 +55,8 @@ INSERT INTO high_scores (player_name, score, survival_time, zombies_killed) VALU
     ('ZombieHunter', 55, 38, 6),
     ('LastStand', 40, 30, 4),
     ('FinalHope', 25, 22, 3)
-ON CONFLICT DO NOTHING;
+) AS seed(player_name, score, survival_time, zombies_killed)
+WHERE NOT EXISTS (SELECT 1 FROM high_scores);
 
 -- Create a view for leaderboard with additional stats
 CREATE OR REPLACE VIEW leaderboard AS

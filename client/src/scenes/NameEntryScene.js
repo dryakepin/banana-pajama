@@ -12,10 +12,18 @@ export default class NameEntryScene extends Phaser.Scene {
         this.cursor = '|';
         this.cursorTimer = null;
         this.showCursor = true;
+        this.isSubmitting = false;
+        this.submitBtn = null;
+        this.skipBtn = null;
     }
 
     init(data) {
         this.scoreData = data;
+
+        // Phaser reuses the same scene instance for every round. Without this
+        // reset a submission left in-flight by the previous game would block
+        // all later ones. See GAME-4 for the same hazard in GameScene.
+        this.isSubmitting = false;
     }
 
     preload() {
@@ -137,6 +145,7 @@ export default class NameEntryScene extends Phaser.Scene {
         .on('pointerdown', () => this.submitScore())
         .on('pointerover', () => submitBtn.setStyle({ backgroundColor: '#008800' }))
         .on('pointerout', () => submitBtn.setStyle({ backgroundColor: '#006600' }));
+        this.submitBtn = submitBtn;
 
         const skipBtn = this.add.text(width / 2 + buttonSpacing, buttonY, 'SKIP', {
             fontSize: isMobile ? '18px' : '24px',
@@ -150,6 +159,7 @@ export default class NameEntryScene extends Phaser.Scene {
         .on('pointerdown', () => this.skipScore())
         .on('pointerover', () => skipBtn.setStyle({ backgroundColor: '#880000' }))
         .on('pointerout', () => skipBtn.setStyle({ backgroundColor: '#660000' }));
+        this.skipBtn = skipBtn;
 
         // Set up keyboard input
         this.setupKeyboardInput();
@@ -325,6 +335,17 @@ export default class NameEntryScene extends Phaser.Scene {
     }
 
     async submitScore() {
+        // At most one submission in flight. Roughly a fifth of the rows in the
+        // production leaderboard are duplicates: identical name/score/time
+        // pairs written within three seconds of each other. The cause is that
+        // the guard below did not exist and removeAllListeners() only silences
+        // the Phaser *keyboard* -- the SUBMIT button stayed interactive for the
+        // whole network round-trip, so a second click (or ENTER then a click)
+        // posted the score twice. See DATA-1 in CODEBASE_REVIEW.md.
+        if (this.isSubmitting) {
+            return;
+        }
+
         // Validate name
         const trimmedName = this.playerName.trim();
         if (trimmedName.length === 0) {
@@ -332,6 +353,9 @@ export default class NameEntryScene extends Phaser.Scene {
             this.showErrorMessage('Please enter a name!');
             return;
         }
+
+        this.isSubmitting = true;
+        this.setButtonsEnabled(false);
 
         // Cleanup mobile input if it exists
         this.cleanupMobileInput();
@@ -388,12 +412,31 @@ export default class NameEntryScene extends Phaser.Scene {
             // Re-enable input after error
             this.time.delayedCall(2000, () => {
                 savingText.destroy();
+                this.isSubmitting = false;
+                this.setButtonsEnabled(true);
                 this.setupKeyboardInput();
             });
         }
     }
 
+    setButtonsEnabled(enabled) {
+        for (const button of [this.submitBtn, this.skipBtn]) {
+            if (!button || !button.active) continue;
+
+            if (enabled) {
+                button.setInteractive({ useHandCursor: true });
+                button.setAlpha(1);
+            } else {
+                button.disableInteractive();
+                button.setAlpha(0.5);
+            }
+        }
+    }
+
     skipScore() {
+        if (this.isSubmitting) {
+            return;
+        }
         this.cleanupMobileInput();
         this.proceedToMenu();
     }
