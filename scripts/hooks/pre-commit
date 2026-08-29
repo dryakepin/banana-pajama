@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+#
+# Blocks a commit that would introduce a secret. Installed by
+# scripts/install-hooks.sh, which points core.hooksPath at this directory.
+#
+# This fails closed: if gitleaks is not installed the commit is refused rather
+# than waved through. You opted into the hook by installing it, and a security
+# check that silently no-ops is worse than no check at all. To bypass in a
+# genuine emergency: git commit --no-verify
+
+exec "$(git rev-parse --show-toplevel)/scripts/scan-secrets.sh" --staged

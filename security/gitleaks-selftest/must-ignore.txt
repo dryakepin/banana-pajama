@@ -1,0 +1,27 @@
+Every line below is a placeholder that appears in this repository's own
+documentation, or a value used by the local/test stack. The scanner must NOT
+flag any of them. If it does, CI turns into noise that people learn to ignore,
+which is how a real finding gets waved through.
+
+These are the actual forms found across README.md, SSL_FIX.md,
+docs/SUPABASE_DEPLOYMENT.md, env.example and the CI workflow.
+
+postgresql://postgres:[PASSWORD]@db.xxxxx.supabase.co:5432/postgres
+postgresql://postgres:[YOUR-PASSWORD]@[PROJECT-REF].supabase.co:5432/postgres
+postgresql://postgres:password@db.xxxxx.supabase.co:5432/postgres
+postgresql://postgres:your_password@db.example.supabase.co:5432/postgres
+postgresql://postgres:YOUR_PASSWORD@db.example.supabase.co:5432/postgres
+postgresql://postgres:your_actual_password@db.example.supabase.co:5432/postgres
+postgresql://postgres:testpw@localhost:5432/postgres?sslmode=disable
+postgresql://postgres:wrong@localhost:1/nope?sslmode=disable
+postgresql://postgres:postgres@database:5432/banana_pajama
+postgresql://appuser:${DB_PASSWORD}@db.example.com:5432/appdb
+postgresql://appuser:<your-password-here>@db.example.com:5432/appdb
+sb_publishable_Xk7mQ2pZ9vLdR4tYwB8sJfH3cGa1
+
+Phaser animation keys from client/src/scenes/GameScene.js. The stock
+generic-api-key rule reads "key: <string>" as a credential.
+
+            appearFrames.push({ key: `zombie4-appear-${i}` });
+            key: 'zombie4-attack',
+            key: 'zombie4-walk',

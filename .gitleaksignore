@@ -1,0 +1,22 @@
+# Findings that are known, triaged, and deliberately not failing the build.
+# Format: <commit>:<file>:<rule>:<line>
+#
+# Add an entry here ONLY after the secret has been rotated. A .gitleaksignore
+# entry hides a finding; it does not make the secret safe.
+
+# SEC-1: the Supabase pooler credential leaked in commit 6f0556f
+# ("Add debug endpoint for connection troubleshooting", 2025-11-01) and
+# removed from the working tree in f7d5edf.
+#
+# Rotated 2026-08-28, and the rotation was verified by confirming the OLD
+# value is now rejected -- the first reset silently failed to apply, and only
+# testing the dead credential caught it.
+#
+# History was deliberately NOT rewritten: the repository is public, so the
+# value must be treated as permanently disclosed. Rotation was the
+# remediation; a rewrite would only reduce casual discoverability.
+#
+# This entry is what keeps CI green on an already-handled incident. It is
+# scoped to this one commit, file, and line -- a new leak, or this same
+# credential reappearing anywhere else, still fails the scan.
+6f0556f2aa45e37ba303027f158ecf496ba6e24e:DEBUG_CHECKLIST.md:postgres-uri-password:66

@@ -47,12 +47,68 @@ The app connects as the `postgres` role (`api/lib/db.js`). On Supabase that is n
 2. All five Vercel production vars re-issued (`DATABASE_URL`, `POSTGRES_URL`, `POSTGRES_PRISMA_URL`, `POSTGRES_URL_NON_POOLING`, `POSTGRES_PASSWORD`) and redeployed; `/api/health` confirms `database: connected`.
 3. Post-incident check for persistence found nothing: 15 roles, all stock Supabase; 37 tables, all in Supabase-managed schemas except `public.high_scores` and `public.game_sessions`. This rules out a backdoor role or object. It does **not** establish whether data was read during the exposure window — that is unknowable from the database side. The only personal data at risk was leaderboard player names.
 
+**Follow-ups since:**
+
+- ~~Remove the string from `DEBUG_CHECKLIST.md` (and preferably delete that file and `DEBUG_INSTRUCTIONS.md` — see DOC-2).~~ ✅ Both files deleted in `f7d5edf`.
+- ~~Add a secret scanner so this cannot recur.~~ ✅ **Done 2026-08-29 — see below.**
+- History rewrite is optional. The repository is public, so the value should be considered permanently disclosed; rotation was the remediation, and a rewrite only reduces casual discoverability.
+
 **Still outstanding:**
 
-- Remove the string from `DEBUG_CHECKLIST.md` (and preferably delete that file and `DEBUG_INSTRUCTIONS.md` — see DOC-2).
-- History rewrite is optional. The repository is public, so the value should be considered permanently disclosed; rotation was the remediation, and a rewrite only reduces casual discoverability.
-- Add a secret scanner (gitleaks pre-commit hook, or enable GitHub secret scanning + push protection) so this cannot recur.
 - Consider connecting as a least-privilege role that owns only `high_scores` and `game_sessions` instead of `postgres`. That would have bounded this incident, and it is a precondition for the RLS work in `database/supabase-rls.sql` to mean anything.
+
+#### Secret scanner (2026-08-29)
+
+**Adding stock gitleaks would not have caught this leak.** Run against the real
+historical `DEBUG_CHECKLIST.md` from commit `6f0556f`, the default ruleset reports:
+
+```
+INF no leaks found
+```
+
+The ~170 built-in rules cover provider tokens (GitHub PATs, Slack, Stripe, JWTs)
+but have no rule for a PostgreSQL URI with an embedded password — which is exactly
+the shape that leaked. A probe of nine credential shapes against the default
+config detected one. Dropping in the tool and calling SEC-1 closed would have
+installed the *appearance* of a control over the specific gap that caused the
+incident.
+
+What was added:
+
+| File | Purpose |
+|---|---|
+| `.gitleaks.toml` | Extends the default ruleset with `postgres-uri-password` and `supabase-secret-key`. Allowlists are shape-based, not string- or line-based. |
+| `security/gitleaks-selftest/` | Fixtures: 6 fake secrets that must be detected, 15 placeholders that must not be. |
+| `scripts/scan-secrets.sh` | Self-test, then scan. Always `--redact`, so no secret reaches a CI log. |
+| `scripts/hooks/pre-commit` | Blocks the commit. Fails closed if gitleaks is missing. |
+| `.gitleaksignore` | The one known historical finding, scoped to that commit/file/line. |
+| `.github/workflows/ci.yml` | `secrets` job; gitleaks pinned to 8.30.1 and checksum-verified. |
+
+Verified in both directions, since a scanner that cannot fail proves nothing:
+
+| Check | Result |
+|---|---|
+| Real leaked file, stock gitleaks | `no leaks found` — the gap, confirmed |
+| Real leaked file, this config | `RuleID: postgres-uri-password` |
+| Full history scan (76 commits) | 1 finding, at `6f0556f:DEBUG_CHECKLIST.md:66` — the SEC-1 credential |
+| Self-test, `postgres-uri-password` broken | Fails, naming the 3 missed lines |
+| Self-test, allowlist broken | Fails, naming the false positives |
+| `git commit` of a fake connection string | **Rejected**, value redacted in output |
+| Clean staged change | Passes |
+
+Two judgement calls worth recording:
+
+- **The 8 `generic-api-key` hits in `GameScene.js` are false positives** — Phaser
+  animation keys like `key: 'zombie4-attack'`. Allowlisted on shape, and added to
+  `must-ignore.txt`, so the exemption is itself tested and stays narrow.
+- **`--log-opts=HEAD` is load-bearing.** By default gitleaks walks every ref,
+  including the local Conductor checkpoint commits, which turned 1 real finding
+  into 40. A scan that reports 40 findings for 1 problem is one people stop reading.
+
+The self-test is the part that matters long-term. It converts "we have a scanner"
+into "the scanner still catches the thing that actually happened to us," checked
+on every run. This is the SEC-1 lesson generalised: **a control that has not been
+observed failing has not been verified.**
 
 ### DB-1 · The Supabase migration script drops half of the schema, silently — ✅ RESOLVED 2026-08-28
 **`scripts/migrate-supabase.js:73-102`**
@@ -774,7 +830,7 @@ Neither backend installs process-level handlers. Under Node 18+, an unhandled re
 ## Suggested remediation order
 
 **Today**
-1. ~~SEC-1 — rotate the Supabase password.~~ ✅ **Done 2026-08-28.** Still open: delete the file, add a secret scanner.
+1. ~~SEC-1 — rotate the Supabase password.~~ ✅ **Done 2026-08-28.** ~~Delete the file~~ ✅ `f7d5edf`. ~~Add a secret scanner~~ ✅ **Done 2026-08-29.** Still open: the least-privilege database role.
 2. DATA-1 — five minutes of manual testing to establish whether high score writes are broken. If they are, this jumps to the top of the list: it is a live outage of the app's only persistent feature.
 3. DB-1 — fix the migration script, then verify RLS is actually enabled on `high_scores` in production. Note the SEC-1 rotation does **not** address this; the two are independent.
 4. INFRA-1 — make `docker compose` valid again so local development works.
