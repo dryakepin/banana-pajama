@@ -1,3 +1,10 @@
+// Phaser.Geom is used below. This module previously relied on the `Phaser`
+// browser global, which only happens to exist because the phaser package
+// assigns window.Phaser as a side effect -- nothing in the bundle guarantees
+// it. Importing it explicitly is what every other module here does.
+// See CLIENT-4 in CODEBASE_REVIEW.md.
+import Phaser from 'phaser';
+
 export default class VirtualJoystick {
     constructor(scene, x, y) {
         this.scene = scene;

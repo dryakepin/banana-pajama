@@ -6,6 +6,7 @@ import FastZombie from '../sprites/FastZombie.js';
 import AnimatedZombie from '../sprites/AnimatedZombie.js';
 import PowerUp from '../sprites/PowerUp.js';
 import TileMap, { MAP_MIN_X, MAP_MIN_Y, MAP_WIDTH, MAP_HEIGHT } from '../world/TileMap.js';
+import { spawnDelays, speedMultiplier, hpMultiplier } from '../world/difficulty.js';
 import VirtualJoystick from '../ui/VirtualJoystick.js';
 import AudioManager from '../utils/AudioManager.js';
 import SoundEffects from '../utils/SoundEffects.js';
@@ -507,14 +508,14 @@ export default class GameScene extends Phaser.Scene {
 
         this.difficultyLevel++;
 
-        // Spawn rate formula: max(floor, floor(baseRate * 0.9^level))
+        // Formulas live in world/difficulty.js so they can be unit tested.
         const level = this.difficultyLevel;
-        const scaledRate = (base, floor) => Math.max(floor, Math.floor(base * Math.pow(0.9, level)));
+        const delays = spawnDelays(level);
 
-        const newBasicRate = scaledRate(2000, 500);
-        const newFastRate = scaledRate(3000, 700);
-        const newTankRate = scaledRate(8000, 2000);
-        const newAnimatedRate = scaledRate(6000, 1500);
+        const newBasicRate = delays.basic;
+        const newFastRate = delays.fast;
+        const newTankRate = delays.tank;
+        const newAnimatedRate = delays.animated;
 
         // Remove old timers and create new ones with updated delays
         this.zombieSpawnTimer.remove();
@@ -549,11 +550,8 @@ export default class GameScene extends Phaser.Scene {
             loop: true
         });
 
-        // Speed multiplier: min(1.5, 1 + level * 0.025)
-        this.zombieSpeedMultiplier = Math.min(1.5, 1 + level * 0.025);
-
-        // HP multiplier: min(2.0, 1 + max(0, level - 3) * 0.05) — kicks in at level 4
-        this.zombieHpMultiplier = Math.min(2.0, 1 + Math.max(0, level - 3) * 0.05);
+        this.zombieSpeedMultiplier = speedMultiplier(level);
+        this.zombieHpMultiplier = hpMultiplier(level);
 
         // Update HUD
         this.difficultyText.setText(`Level ${level}`);
