@@ -19,7 +19,16 @@ Headline items:
 - ~~**A gameplay bug produces invulnerable zombies.**~~ Once a zombie group hit its `maxSize`, new zombies were created into the scene but silently rejected from the group, so bullets passed through them forever. **Fixed 2026-08-29 — see GAME-1.**
 - ~~**Zero tests**, no lint config, and both `npm test` and `npm run lint` are documented but non-functional.~~ **Fixed 2026-08-29 — 113 tests, lint and CI; see QA-1.**
 
-Counts: **6 critical (P0)** — 6 resolved — **11 high (P1)** — 3 resolved — **16 medium (P2)** — 3 resolved, 1 partial — **11 low (P3)**.
+Counts: **47 findings** — 13 resolved, 1 partial.
+
+| Severity | Total | Resolved |
+|---|---|---|
+| P0 critical | 6 | **6** |
+| P1 high | 12 | 4 |
+| P2 medium | 17 | 3 (+1 partial) |
+| P3 low | 12 | 0 |
+
+(Earlier revisions of this line miscounted P1/P2/P3 as 11/16/11; recounted from the section headings 2026-08-29.)
 
 ### Severity legend
 
@@ -446,7 +455,7 @@ That makes the current environment fragile in a non-obvious way: `POSTGRES_URL` 
 
 **Fix:** Download Supabase's CA certificate (Dashboard → Settings → Database → SSL Configuration), ship it with the app, and use `ssl: { ca: fs.readFileSync(...), rejectUnauthorized: true }`. Then make all connection strings agree — either all carry `sslmode=verify-full` or none carry `sslmode` at all. Do not attempt this by editing URLs alone; per point 2 it cannot work without the CA.
 
-### SEC-4 · No `.dockerignore`, and `.gitignore` prevents one from ever being added
+### SEC-4 · No `.dockerignore`, and `.gitignore` prevents one from ever being added — ✅ RESOLVED 2026-08-28
 **`.gitignore:53-54`, `server/Dockerfile:18`, `client/Dockerfile`**
 
 ```
@@ -459,6 +468,12 @@ That makes the current environment fragile in a non-obvious way: `POSTGRES_URL` 
 Anyone who can `docker pull` or `docker save` the image gets the secrets, and the image is needlessly bloated.
 
 **Fix:** Delete the `.dockerignore` line from `.gitignore`; add `.dockerignore` files excluding at least `.env*`, `node_modules`, `.git`, `dist`, `*.md`.
+
+#### Resolution (2026-08-28)
+
+Fixed in `66a4035`: the `.dockerignore` line was removed from `.gitignore`, and
+`server/.dockerignore` and `client/.dockerignore` were added. **This section was
+left unmarked until 2026-08-29** — a bookkeeping miss, not an unfixed finding.
 
 ### SEC-5 · Rate limiting is non-functional on both backends
 **`server/index.js:16-20`** and **`api/lib/middleware.js:29-58`**
