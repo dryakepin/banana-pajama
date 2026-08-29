@@ -1,9 +1,9 @@
 # Codebase Review — Banana Pajama Zombie Shooter
 
-**Date:** 2026-08-28 (revised 2026-08-29 after remediating SEC-1, SEC-4, DB-1, DB-4, DATA-1, INFRA-1, QA-1, GAME-1, GAME-2, GAME-3 and part of CLIENT-4)
+**Date:** 2026-08-28 (revised 2026-08-29 after remediating SEC-1, SEC-4, DB-1, DB-4, DATA-1, INFRA-1, QA-1, GAME-1, GAME-2, GAME-3, GAME-4 and part of CLIENT-4)
 **Reviewed at:** branch `dryakepin/porto` (base `origin/main`, HEAD `46788a1`)
 **Scope:** full repository — client (Phaser), `server/` (Express), `api/` (Vercel functions), `database/`, `docker/`, `nginx/`, `scripts/`, docs
-**Mostly analysis.** Findings are analysis only except SEC-1, SEC-4, DB-1, DB-4, DATA-1, INFRA-1, QA-1, GAME-1, GAME-2, GAME-3 and CLIENT-4, whose remediations are recorded inline below.
+**Mostly analysis.** Findings are analysis only except SEC-1, SEC-4, DB-1, DB-4, DATA-1, INFRA-1, QA-1, GAME-1, GAME-2, GAME-3, GAME-4 and CLIENT-4, whose remediations are recorded inline below.
 
 ---
 
@@ -19,7 +19,7 @@ Headline items:
 - ~~**A gameplay bug produces invulnerable zombies.**~~ Once a zombie group hit its `maxSize`, new zombies were created into the scene but silently rejected from the group, so bullets passed through them forever. **Fixed 2026-08-29 — see GAME-1.**
 - ~~**Zero tests**, no lint config, and both `npm test` and `npm run lint` are documented but non-functional.~~ **Fixed 2026-08-29 — 113 tests, lint and CI; see QA-1.**
 
-Counts: **6 critical (P0)** — 6 resolved — **11 high (P1)** — 1 resolved — **16 medium (P2)** — 2 resolved, 1 partial — **11 low (P3)**.
+Counts: **6 critical (P0)** — 6 resolved — **11 high (P1)** — 1 resolved — **16 medium (P2)** — 3 resolved, 1 partial — **11 low (P3)**.
 
 ### Severity legend
 
@@ -232,6 +232,23 @@ if (zombie) {
 Note the installed Phaser is **3.90.0**, not the 3.80.1 this report originally cited — `client/package.json` pins `^3.80.1` and the minor floated. The `add()` early-return is identical in both.
 
 `_spawnZombieOfType` also lost its `ZombieClass` parameter. `group.create()` builds from the group's own `classType` regardless, so a separate parameter could silently disagree with what is actually constructed.
+
+**Confirmed in a live game 2026-08-29**, which this fix originally lacked. Driving
+the built bundle in a browser, 40 spawn attempts against the tank group
+(`maxSize: 10`) produced exactly 10 members and **0 zombie sprites outside the
+group** — the orphans that made GAME-1 unkillable. Deactivating all 10 left
+`total: 10, active: 0`, and 6 further spawns reused that pool rather than growing
+it (GAME-2), with `speed === baseSpeed` and `maxHealth === baseMaxHealth`
+(GAME-3).
+
+A note on how that was verified, because it cost time: the game appeared to render
+a **blank screen** on starting a round, under both a static server and nginx, with
+no console errors. It was not a bug. The automated browser tab was backgrounded,
+so `requestAnimationFrame` never fired — `document.hidden: true`, 0 frames
+advanced — and Phaser's SceneManager queue held `stop MenuScene` / `start
+GameScene` forever without draining. Stepping `game.loop.step()` by hand ran the
+game normally. The earlier suspicion that this was an asset-path problem was
+wrong; the assets all returned 200.
 
 ### GAME-2 · Object pooling does not work for three of four zombie types — ✅ RESOLVED 2026-08-29
 **`client/src/sprites/BasicZombie.js:274-297`, `TankZombie.js:312-338`, `FastZombie.js:316-340`**
@@ -539,7 +556,7 @@ Phaser does not await `create()`. Two consequences:
 
 ## P2 — Medium
 
-### GAME-4 · Game state is not fully reset between rounds
+### GAME-4 · Game state is not fully reset between rounds — ✅ RESOLVED 2026-08-29
 **`client/src/scenes/GameScene.js:142-145`**
 
 `create()` resets only `score`, `gameTime`, and `hp`. Phaser reuses the same scene instance across `scene.start('GameScene')`, so these constructor-initialised fields carry over from the previous game:
@@ -549,6 +566,42 @@ Phaser does not await `create()`. Two consequences:
 Most visibly: **`zombiesKilled` accumulates across games and is submitted to the leaderboard**, and a second game starts at the previous game's difficulty level with the previous multipliers already applied (compounding with GAME-3). Restarting after a pause can also start the new game already paused.
 
 **Fix:** Move all of it into an `initState()` called from `create()`, or use Phaser's `init()` hook, which exists for exactly this.
+
+#### Resolution (2026-08-29)
+
+**Reproduced first.** Two rounds of 37 and 5 kills, with the second round's
+submitted payload asserted:
+
+```
+expect(received).toBe(expected)
+Expected: 5
+Received: 42
+```
+
+42 is what reached the leaderboard.
+
+The fix uses Phaser's `init()` hook, which the SceneManager calls before
+`preload()` and `create()` on every `scene.start`. Both `init()` and the
+constructor now delegate to one `resetRoundState()` method, so the two cannot
+drift — the original bug was exactly that kind of drift, with the constructor
+initialising 18 fields and `create()` remembering to reset 3 of them. The
+three-line reset block in `create()` is gone.
+
+The constructor now holds only two things: scene-lifetime references that
+`create()` reassigns anyway, and genuine tuning constants (`shotCooldown`,
+`difficultyInterval`, the four spawn rates — all confirmed never mutated
+during play, so they are not round state).
+
+`client/test/round-reset.test.js` (4 tests) asserts every field in the list
+returns to its constructed value. It first asserts that a simulated round
+*changed* each field, so "it was reset" cannot pass vacuously.
+
+**Also confirmed against the real engine**, in a browser running the built
+bundle: a round ending with 12 kills, difficulty level 7, invincibility on and
+paused was followed by a new round reporting `zombiesKilled: 0`, `hp: 100`,
+`difficultyLevel: 0`, both multipliers `1`, `isInvincible: false`,
+`isPaused: false`. The game-over payload for round one still correctly carried
+its own 12 kills.
 
 ### CLIENT-2 · No timeout or abort on any network call
 **`client/src/scenes/HighScoreScene.js:92`, `GameOverScene.js:80`, `NameEntryScene.js:354`**

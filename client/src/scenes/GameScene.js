@@ -14,12 +14,11 @@ import SoundEffects from '../utils/SoundEffects.js';
 export default class GameScene extends Phaser.Scene {
     constructor() {
         super({ key: 'GameScene' });
+
+        // Scene-lifetime references. Phaser reuses this instance across rounds;
+        // create() reassigns every one of these on each start.
         this.player = null;
         this.cursors = null;
-        this.score = 0;
-        this.gameTime = 0;
-        this.zombiesKilled = 0;
-        this.hp = 100;
         this.crosshair = null;
         this.bullets = null;
         this.zombies = null;
@@ -30,22 +29,57 @@ export default class GameScene extends Phaser.Scene {
         this.tankZombieSpawnTimer = null;
         this.fastZombieSpawnTimer = null;
         this.animatedZombieSpawnTimer = null;
-        this.zombieSpawnRate = 2000; // Start spawning every 2 seconds
-        this.tankZombieSpawnRate = 8000; // Tank zombies spawn every 8 seconds
-        this.fastZombieSpawnRate = 3000; // Fast zombies spawn every 3 seconds for testing
-        this.animatedZombieSpawnRate = 6000; // Animated zombies spawn every 6 seconds (less frequent due to complexity)
         this._audio = null;
         this.tileMap = null;
         this.virtualJoystick = null;
+        this.pauseDialog = null;
+        this.pauseButton = null;
         this.isMobile = false;
-        this.joystickPointerId = null; // Track which pointer is controlling joystick
-        this.aimingPointerId = null;   // Track which pointer is aiming
-        this.lastShotTime = 0; // Track when last shot was fired
-        this.shotCooldown = 400; // 400ms between shots
-        
+
+        // Tuning constants, never mutated during play. The spawn rates seed the
+        // initial timers; updateDifficulty() derives later delays from the level
+        // via world/difficulty.js rather than mutating these.
+        this.zombieSpawnRate = 2000;         // Basic zombies, every 2s
+        this.tankZombieSpawnRate = 8000;     // Tank zombies, every 8s
+        this.fastZombieSpawnRate = 3000;     // Fast zombies, every 3s
+        this.animatedZombieSpawnRate = 6000; // Animated zombies, every 6s
+        this.shotCooldown = 400;             // ms between shots
+        this.difficultyInterval = 30;        // seconds between difficulty level-ups
+
+        this.resetRoundState();
+    }
+
+    /**
+     * Phaser calls init() before preload() and create() on every
+     * scene.start('GameScene') -- the hook that exists for exactly this job.
+     *
+     * GAME-4: create() used to reset only score, gameTime and hp, so every
+     * other field below survived into the next round. Most damagingly
+     * zombiesKilled, which accumulated across rounds and was then submitted to
+     * the leaderboard; and the difficulty multipliers, which made round two
+     * start at round one's difficulty with the scaling already applied.
+     */
+    init() {
+        this.resetRoundState();
+    }
+
+    /**
+     * Everything that describes "this round" rather than "this scene".
+     *
+     * Single-sourced so the constructor and init() cannot drift: a new field
+     * belongs in exactly one of the two, and putting round state here is what
+     * makes it survive a restart correctly. test/round-reset.test.js asserts
+     * this list against a freshly constructed scene.
+     */
+    resetRoundState() {
+        this.score = 0;
+        this.gameTime = 0;
+        this.zombiesKilled = 0;
+        this.hp = 100;
+        this.lastShotTime = 0;
+
         // Difficulty scaling
         this.difficultyLevel = 0;
-        this.difficultyInterval = 30; // seconds between level-ups
         this.zombieSpeedMultiplier = 1;
         this.zombieHpMultiplier = 1;
 
@@ -56,14 +90,14 @@ export default class GameScene extends Phaser.Scene {
         this.rapidFireEndTime = 0;
         this.dualShotActive = false;
         this.dualShotEndTime = 0;
-        
+        this.powerUpIndicators = {};
+
         // Pause system
         this.isPaused = false;
-        this.pauseDialog = null;
-        this.pauseButton = null;
-        
-        // Power-up indicators
-        this.powerUpIndicators = {};
+
+        // Touch pointer tracking
+        this.joystickPointerId = null;
+        this.aimingPointerId = null;
     }
 
     preload() {
@@ -140,10 +174,8 @@ export default class GameScene extends Phaser.Scene {
         // Create animations for animated zombie (zombie-4)
         this.createAnimatedZombieAnimations();
 
-        // Reset game state when starting new game
-        this.score = 0;
-        this.gameTime = 0;
-        this.hp = 100;
+        // Round state is reset in init(), which Phaser calls before this on
+        // every scene.start. See GAME-4.
 
         // Set world bounds to match tile map (5x screen size, centered on origin)
         this.physics.world.setBounds(MAP_MIN_X, MAP_MIN_Y, MAP_WIDTH, MAP_HEIGHT);
