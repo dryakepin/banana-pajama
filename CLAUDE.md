@@ -357,7 +357,11 @@ cd docker && docker-compose --profile local-db up -d
 - 5 game scenes fully implemented
 - 7 sprite classes with AI
 - 6 automated deployment scripts
-- Full test coverage for critical paths
+- Test suites in `api/`, `client/` and `server/` (run `./scripts/test-all.sh`)
+- Coverage is targeted, not comprehensive: API validation, the difficulty
+  curve, tile maths, the DATA-1 duplicate-submission guard, and the DB-1
+  migration runner. Gameplay logic that depends on real Phaser behaviour is
+  not covered — the client tests stub the engine out.
 
 ### Documentation
 

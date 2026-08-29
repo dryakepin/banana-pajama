@@ -1,9 +1,9 @@
 # Codebase Review — Banana Pajama Zombie Shooter
 
-**Date:** 2026-08-28 (revised 2026-08-28 after remediating SEC-1, SEC-4, DB-1, DB-4, DATA-1 and INFRA-1)
+**Date:** 2026-08-28 (revised 2026-08-29 after remediating SEC-1, SEC-4, DB-1, DB-4, DATA-1, INFRA-1, QA-1 and part of CLIENT-4)
 **Reviewed at:** branch `dryakepin/porto` (base `origin/main`, HEAD `46788a1`)
 **Scope:** full repository — client (Phaser), `server/` (Express), `api/` (Vercel functions), `database/`, `docker/`, `nginx/`, `scripts/`, docs
-**Mostly analysis.** Findings are analysis only except SEC-1, SEC-4, DB-1, DB-4, DATA-1 and INFRA-1, whose remediations are recorded inline below.
+**Mostly analysis.** Findings are analysis only except SEC-1, SEC-4, DB-1, DB-4, DATA-1, INFRA-1, QA-1 and CLIENT-4, whose remediations are recorded inline below.
 
 ---
 
@@ -17,9 +17,9 @@ Headline items:
 - ~~**`scripts/migrate-supabase.js` silently discards half of the schema**~~, including both `CREATE TABLE`s and the `high_scores` RLS lockdown. It reported success while doing almost nothing. **Fixed 2026-08-28 — see DB-1.**
 - ~~**`docker compose` does not run at all**~~ — the compose file was invalid without an explicit profile flag that no script or doc passed. **Fixed 2026-08-28 — see INFRA-1.**
 - **A gameplay bug produces invulnerable zombies.** Once a zombie group hits its `maxSize`, new zombies are created into the scene but silently rejected from the group, so bullets pass through them forever.
-- **Zero tests**, no lint config, and both `npm test` and `npm run lint` are documented but non-functional.
+- ~~**Zero tests**, no lint config, and both `npm test` and `npm run lint` are documented but non-functional.~~ **Fixed 2026-08-29 — 113 tests, lint and CI; see QA-1.**
 
-Counts: **6 critical (P0)** — 3 resolved — **11 high (P1)**, **16 medium (P2)** — 2 resolved — **11 low (P3)**.
+Counts: **6 critical (P0)** — 3 resolved — **11 high (P1)** — 1 resolved — **16 medium (P2)** — 2 resolved, 1 partial — **11 low (P3)**.
 
 ### Severity legend
 
@@ -347,7 +347,7 @@ Every chunk boundary crossing then builds another 256 sprites in one frame, whic
 
 **Fix:** Drop `RENDER_DISTANCE` to 1 (still 3× the viewport), clamp chunk generation to the map bounds, and replace per-tile `Image` objects with a `Blitter`, a baked `RenderTexture` per chunk, or Phaser's tilemap layer. Any one of these cuts the object count by 1–2 orders of magnitude.
 
-### QA-1 · No tests exist, and both `npm test` and `npm run lint` are broken
+### QA-1 · No tests exist, and both `npm test` and `npm run lint` are broken — ✅ RESOLVED 2026-08-29
 **`server/package.json:9-10, 26-29`, `client/package.json:10-11`, `README.md:109,117`**
 
 `jest`, `supertest`, and `eslint` are all declared as devDependencies. There are **zero** test files and **no** eslint config file (neither `.eslintrc*` nor `eslint.config.js`), so `npm test` fails with "no tests found" and `npm run lint` fails on missing config — both under eslint 9, which requires flat config.
@@ -357,6 +357,35 @@ Meanwhile `CLAUDE.md` claims "Full test coverage for critical paths" and `TODO.t
 Given the density of logic bugs found in this review (GAME-1 through GAME-4), the absence of even smoke tests is the root cause enabler.
 
 **Fix:** Start with the highest-value, lowest-effort targets: `supertest` integration tests for the four API handlers (validation bounds, method rejection, malformed body), and pure-function unit tests for `TileMap.generateTileType` / `isWalkable`, the difficulty formula, and `sanitizePlayerName`. Add `eslint.config.js` and wire both into CI.
+
+#### Resolution (2026-08-29)
+
+**113 tests across three suites, plus lint on all three workspaces, plus CI.**
+
+| Workspace | Tests | What it covers |
+|---|---|---|
+| `api/` | 54 | `sanitizePlayerName`, `isValidUUID`, CORS allowlist, rate-limit 429 boundary; `highscores` and `sessions` handlers with the pool mocked — score/time/kill bounds, 405, preflight, empty-after-sanitise names, and that a 500 never leaks the database error |
+| `client/` | 48 | DATA-1 duplicate-submission guard; the difficulty curve; `TileMap` coordinate maths and walkability |
+| `server/` | 11 | DB-1 migration runner against a real Postgres |
+
+**Every regression test was verified to fail against the pre-fix code**, which is the only thing that makes a regression test worth having:
+
+- DATA-1 suite against `66a4035` (before PR #5): **8 of 9 failed**.
+- DB-1 suite against `66a4035`: **9 of 11 failed**. (One of the two passes vacuously — "anon has no grants" holds when no tables exist at all.)
+
+**Design choices worth recording:**
+
+- **No root `package.json`.** It would give a single `npm test`, but this repo has never had one and adding it risks changing Vercel's project detection (`vercel.json` pins `framework: null` with an explicit `buildCommand`). `scripts/test-all.sh` gives the same convenience with no deployment risk.
+- **Phaser is stubbed, not loaded** (`client/test/stubs/phaser.js`). The real engine needs canvas, WebGL and a DOM at import time. Scene classes only need `Phaser.Scene` to extend. The cost is stated below.
+- **The migration tests skip unless `TEST_DATABASE_URL` is set**, so `npm test` never requires Docker. CI always runs them against a Postgres service container.
+- **The difficulty formulas were extracted** from `GameScene.increaseDifficulty()` into `client/src/world/difficulty.js` so they could be tested at all. Verified behaviour-identical to the original inline expressions across levels 0–500 before the old code was removed.
+- **No tests for `server/`'s routes.** They duplicate `api/`, need a live database, and ARCH-1 is still unresolved — cementing the duplicated backend with tests would make it harder to delete.
+
+**Lint** is `eslint.config.js` in all three workspaces: flat config, deliberately a small high-signal rule set rather than `recommended`, since a never-linted codebase would drown in stylistic warnings. It found a real bug on the first run — see CLIENT-4. Current state: **0 errors, 21 warnings** (all unused variables).
+
+**CI** is `.github/workflows/ci.yml`: three jobs on every push and PR. The client job also runs the production build, precisely because the stubbed Phaser means a green suite does not prove the bundle still compiles.
+
+**What this does NOT cover, stated plainly:** because Phaser is stubbed, none of this can catch bugs in the engine's own semantics. **GAME-1 is exactly such a bug** — `Group.add()` silently rejecting a sprite at `maxSize` is Phaser behaviour, and only a real group would demonstrate it. GAME-1, GAME-2 and GAME-3 remain open and untested. A green client suite is not evidence that gameplay is correct, and the stub file says so in a comment.
 
 ### DEP-1 · Known vulnerabilities in production dependencies
 **`server/package.json`, `client/package.json`**
@@ -423,7 +452,7 @@ If the API returns a `{success: true}` payload without `data` — which the stan
 
 **Fix:** Optional-chain the access and treat HTTP 2xx as success regardless of body shape.
 
-### CLIENT-4 · `VirtualJoystick` uses the `Phaser` global without importing it
+### CLIENT-4 · `VirtualJoystick` uses the `Phaser` global without importing it — ⚠️ PARTIALLY RESOLVED 2026-08-29
 **`client/src/ui/VirtualJoystick.js:1, 46-47`**
 
 The file has no `import Phaser from 'phaser'` but calls `new Phaser.Geom.Circle(...)`. It works today only because Phaser's default entry point is a UMD bundle that assigns `window.Phaser` as a side effect. Switching to Phaser's ESM build, enabling stricter bundling, or tree-shaking will turn this into a runtime `ReferenceError` in the mobile control path.
@@ -431,6 +460,12 @@ The file has no `import Phaser from 'phaser'` but calls `new Phaser.Geom.Circle(
 Also: `setupInput()` is called twice — once from the constructor (line 17) and once from `createJoystick()` (line 40) — so every joystick registers its interactive areas twice.
 
 **Fix:** Add the import; remove the duplicate call.
+
+#### Resolution (2026-08-29)
+
+The missing import is fixed. It was the **first thing the new eslint config caught** — four `no-undef` errors, the only errors in the entire repository — which is a fair advertisement for QA-1 having been worth doing.
+
+**The duplicate `setupInput()` call is NOT fixed.** It is still called from both the constructor (line 24) and the end of `createJoystick()` (line 47), which the constructor calls on line 23, so every joystick still registers its interactive areas twice. That is a behavioural change in the mobile control path with no test covering it, so it did not belong in a testing change.
 
 ### CLIENT-5 · Fullscreen handling in `index.js` leaks listeners and can feed back on itself
 **`client/src/index.js:373-393, 620-629`**

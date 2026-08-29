@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  api:
+    name: api (tests + lint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm install --prefix api
+      - run: npm test --prefix api
+      - run: npm run lint --prefix api
+
+  client:
+    name: client (tests + lint + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm install --prefix client
+      - run: npm test --prefix client
+      - run: npm run lint --prefix client
+      # The build is part of CI because the client tests stub Phaser out
+      # entirely (see client/test/stubs/phaser.js). A green suite therefore
+      # does not prove the bundle still compiles against the real engine.
+      - run: npm run build --prefix client
+
+  server:
+    name: server (migration integration + lint)
+    runs-on: ubuntu-latest
+
+    # Locally these tests are skipped unless TEST_DATABASE_URL is set, so that
+    # `npm test` never requires Docker. CI is where they always run.
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: testpw
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm install --prefix server
+      - run: npm test --prefix server
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:testpw@localhost:5432/postgres?sslmode=disable
+      - run: npm run lint --prefix server

@@ -121,6 +121,34 @@ npm run db:migrate # Run database migrations
 npm run db:seed    # Seed database
 ```
 
+### Running the Tests
+
+```bash
+# Everything: all three suites plus lint
+./scripts/test-all.sh
+
+# Or one workspace at a time
+npm test --prefix api        # handler + middleware unit tests
+npm test --prefix client     # scene regression + pure-function tests
+npm test --prefix server     # migration integration tests
+```
+
+The migration tests need a real PostgreSQL and are **skipped by default**, so
+`npm test` never requires Docker. To include them:
+
+```bash
+docker run -d --name bp-test -e POSTGRES_PASSWORD=testpw -p 55433:5432 postgres:15
+TEST_DATABASE_URL="postgresql://postgres:testpw@localhost:55433/postgres?sslmode=disable" ./scripts/test-all.sh
+```
+
+CI runs all three suites plus lint on every push and pull request, with the
+migration tests always enabled against a Postgres service container.
+
+**What the tests do not cover:** the client suite replaces Phaser with a stub,
+so it cannot catch bugs in the engine's own semantics — group capacity, physics
+and collision behaviour are all outside its reach. A green client suite is not
+evidence that gameplay is correct.
+
 ## 📁 Project Structure
 
 ```
