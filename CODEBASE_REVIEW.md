@@ -1,9 +1,9 @@
 # Codebase Review — Banana Pajama Zombie Shooter
 
-**Date:** 2026-08-28 (revised 2026-08-29 after remediating SEC-1, SEC-4, DB-1, DB-4, DATA-1, INFRA-1, QA-1 and part of CLIENT-4)
+**Date:** 2026-08-28 (revised 2026-08-29 after remediating SEC-1, SEC-4, DB-1, DB-4, DATA-1, INFRA-1, QA-1, GAME-1, GAME-2, GAME-3 and part of CLIENT-4)
 **Reviewed at:** branch `dryakepin/porto` (base `origin/main`, HEAD `46788a1`)
 **Scope:** full repository — client (Phaser), `server/` (Express), `api/` (Vercel functions), `database/`, `docker/`, `nginx/`, `scripts/`, docs
-**Mostly analysis.** Findings are analysis only except SEC-1, SEC-4, DB-1, DB-4, DATA-1, INFRA-1, QA-1 and CLIENT-4, whose remediations are recorded inline below.
+**Mostly analysis.** Findings are analysis only except SEC-1, SEC-4, DB-1, DB-4, DATA-1, INFRA-1, QA-1, GAME-1, GAME-2, GAME-3 and CLIENT-4, whose remediations are recorded inline below.
 
 ---
 
@@ -16,10 +16,10 @@ Headline items:
 - ~~**A live database password is committed to git and pushed to `origin/main`**~~ (`DEBUG_CHECKLIST.md:66`). **Rotated 2026-08-28 — see SEC-1.**
 - ~~**`scripts/migrate-supabase.js` silently discards half of the schema**~~, including both `CREATE TABLE`s and the `high_scores` RLS lockdown. It reported success while doing almost nothing. **Fixed 2026-08-28 — see DB-1.**
 - ~~**`docker compose` does not run at all**~~ — the compose file was invalid without an explicit profile flag that no script or doc passed. **Fixed 2026-08-28 — see INFRA-1.**
-- **A gameplay bug produces invulnerable zombies.** Once a zombie group hits its `maxSize`, new zombies are created into the scene but silently rejected from the group, so bullets pass through them forever.
+- ~~**A gameplay bug produces invulnerable zombies.**~~ Once a zombie group hit its `maxSize`, new zombies were created into the scene but silently rejected from the group, so bullets passed through them forever. **Fixed 2026-08-29 — see GAME-1.**
 - ~~**Zero tests**, no lint config, and both `npm test` and `npm run lint` are documented but non-functional.~~ **Fixed 2026-08-29 — 113 tests, lint and CI; see QA-1.**
 
-Counts: **6 critical (P0)** — 3 resolved — **11 high (P1)** — 1 resolved — **16 medium (P2)** — 2 resolved, 1 partial — **11 low (P3)**.
+Counts: **6 critical (P0)** — 6 resolved — **11 high (P1)** — 1 resolved — **16 medium (P2)** — 2 resolved, 1 partial — **11 low (P3)**.
 
 ### Severity legend
 
@@ -125,7 +125,7 @@ So the exposure was latent rather than live: the hole would have opened the next
 
 **Note for whoever runs it next:** there is no `node_modules` anywhere in the repo and no root `package.json`, so `node scripts/migrate-supabase.js` cannot resolve `pg` or `dotenv` as shipped. That is not fixed here — see QA-1.
 
-### GAME-1 · Zombies past the group cap are invulnerable and unkillable
+### GAME-1 · Zombies past the group cap are invulnerable and unkillable — ✅ RESOLVED 2026-08-29
 **`client/src/scenes/GameScene.js:866-877`**
 
 ```js
@@ -148,7 +148,36 @@ Combined with GAME-2 below (the pool is never actually reused, so the groups fil
 
 **Fix:** Use `group.get(x, y)` (which respects `maxSize` and returns `null` when full) and bail out of the spawn when it returns `null`. Never construct-then-`add`.
 
-### GAME-2 · Object pooling does not work for three of four zombie types
+#### Resolution (2026-08-29)
+
+`_spawnZombieOfType` no longer constructs then adds:
+
+```js
+let zombie = group.getFirstDead(false);
+if (zombie) {
+    zombie.reset(x, y);
+} else {
+    zombie = group.create(x, y);   // null when at maxSize
+    if (!zombie) return;           // skip the spawn; never build an orphan
+}
+```
+
+`Group.create()` runs the same `isFull()` check *before* constructing, so the orphan is never built. The same pattern now guards `shoot()` (both barrels) and `spawnPowerUp()`; for power-ups `create(x, y, type)` works because Group forwards its third argument to the constructor's `key` parameter, which `PowerUp` uses as its type.
+
+**Four Phaser behaviours were verified from source before relying on them**, since the whole fix depends on them:
+
+| Concern | Phaser 3.90.0 source | Verdict |
+|---|---|---|
+| Does `add()` really drop silently? | `Group.add`: `if (this.isFull()) { return this; }` | Yes — GAME-1 confirmed |
+| Does the constructor's `scene.add.existing()` clash with `create()`'s `addToDisplayList()`? | `GameObject.addToDisplayList`: *"Don't repeat if it's already on this list"* | Safe |
+| Double-add to the update list? | `UpdateList.checkQueue = true`, and `ProcessQueue.add` dedupes when set | Safe |
+| Second physics body? | `PhysicsGroup.createCallbackHandler`: `if (!child.body)` | Safe |
+
+Note the installed Phaser is **3.90.0**, not the 3.80.1 this report originally cited — `client/package.json` pins `^3.80.1` and the minor floated. The `add()` early-return is identical in both.
+
+`_spawnZombieOfType` also lost its `ZombieClass` parameter. `group.create()` builds from the group's own `classType` regardless, so a separate parameter could silently disagree with what is actually constructed.
+
+### GAME-2 · Object pooling does not work for three of four zombie types — ✅ RESOLVED 2026-08-29
 **`client/src/sprites/BasicZombie.js:274-297`, `TankZombie.js:312-338`, `FastZombie.js:316-340`**
 
 ```js
@@ -167,7 +196,24 @@ CLAUDE.md advertises "Sprite pooling for bullets and zombies" and "Maximum 50 co
 
 **Fix:** Pick one convention. Standard Phaser pooling is `setActive(false); setVisible(false); body.enable = false` in a `deactivate()` method — leave `destroy()` alone entirely so the engine's teardown path still works.
 
-### GAME-3 · Zombie speed and HP compound geometrically on pooled reuse
+#### Resolution (2026-08-29)
+
+Exactly that convention, applied to all six pooled classes. Each now has:
+
+```js
+deactivate() {
+    this.isActive = false;
+    this.setActive(false);
+    this.setVisible(false);
+    if (this.body) { this.setVelocity(0, 0); this.body.enable = false; }
+}
+```
+
+Basic/Tank/Fast zombies call it from their death delays instead of `destroy()`, so `getFirstDead()` can find them and their previously-unreachable `reset()` methods now run. `AnimatedZombie` routes its fade-out `onComplete` through the same method.
+
+`Bullet` and `PowerUp` had the opposite defect — `destroy()` overridden **without** `super.destroy()`, so they could never be freed even on scene shutdown. That method is renamed `deactivate()` and every self-`destroy()` call site updated; `destroy()` is once again Phaser's, so teardown works. `reset()` and `Bullet.fire()` re-enable the physics body that `deactivate()` switched off.
+
+### GAME-3 · Zombie speed and HP compound geometrically on pooled reuse — ✅ RESOLVED 2026-08-29
 **`client/src/scenes/GameScene.js:879-886` + `client/src/sprites/AnimatedZombie.js:387-419`**
 
 ```js
@@ -180,6 +226,18 @@ This runs on every spawn — including on a **recycled** zombie. `AnimatedZombie
 At difficulty level 10 (5 minutes in) the speed multiplier is 1.25. An animated zombie recycled 20 times over a long run ends up at roughly `1.25^20 ≈ 86×` base speed, with HP scaled the same way. The run becomes unplayable — and it will look like a random, unreproducible "the game went crazy" bug.
 
 **Fix:** Store `baseSpeed` / `baseMaxHealth` on construction and have `reset()` restore from those before the scene applies scaling. Better: derive the scaled values from base × current multiplier rather than mutating in place.
+
+#### Resolution (2026-08-29)
+
+Both halves. All four zombie classes capture `baseSpeed` / `baseMaxHealth` in the constructor and restore them in `reset()`, and the scene now *derives* rather than mutates:
+
+```js
+zombie.speed = zombie.baseSpeed * this.zombieSpeedMultiplier;
+zombie.maxHealth = Math.max(1, Math.ceil(zombie.baseMaxHealth * this.zombieHpMultiplier));
+zombie.health = zombie.maxHealth;
+```
+
+Deriving makes the operation idempotent, so it is correct however many times a zombie is recycled — and it also scales *down* when a new round resets the multipliers, which restoring-then-multiplying alone would not guarantee. The `Math.max(1, …)` floor stops a zero multiplier producing an unkillable 0-HP zombie. The old `if (multiplier > 1)` guards are gone; the derivation is unconditional.
 
 ### INFRA-1 · `docker compose` is invalid — local development is broken — ✅ RESOLVED 2026-08-28
 **`docker/docker-compose.yml:6-8, 65-67`**
@@ -386,6 +444,8 @@ Given the density of logic bugs found in this review (GAME-1 through GAME-4), th
 **CI** is `.github/workflows/ci.yml`: three jobs on every push and PR. The client job also runs the production build, precisely because the stubbed Phaser means a green suite does not prove the bundle still compiles.
 
 **What this does NOT cover, stated plainly:** because Phaser is stubbed, none of this can catch bugs in the engine's own semantics. **GAME-1 is exactly such a bug** — `Group.add()` silently rejecting a sprite at `maxSize` is Phaser behaviour, and only a real group would demonstrate it. GAME-1, GAME-2 and GAME-3 remain open and untested. A green client suite is not evidence that gameplay is correct, and the stub file says so in a comment.
+
+> **Superseded 2026-08-29.** The paragraph above was right that a stubbed Phaser cannot catch GAME-1, and wrong that this made GAME-1 untestable. `client/test/pooling.test.js` imports the **real** `Group` (`phaser/src/gameobjects/group/Group.js`), which loads standalone under jsdom, and drives it with the real sprite classes. Booting a full `Phaser.Game` remains impossible here — under jsdom the texture manager waits on `Image` onload events that never fire — but the group semantics GAME-1 depends on are now genuinely exercised rather than assumed. The client suite grew from 48 to 66 tests. The broader caveat still holds for rendering, input and physics integration.
 
 ### DEP-1 · Known vulnerabilities in production dependencies
 **`server/package.json`, `client/package.json`**

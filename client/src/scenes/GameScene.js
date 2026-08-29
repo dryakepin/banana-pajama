@@ -597,24 +597,23 @@ export default class GameScene extends Phaser.Scene {
             return;
         }
         
-        // Get bullet from pool or create new one
-        let bullet = this.bullets.getFirstDead();
-        
+        // Same orphan hazard as the zombie spawn path -- an orphaned bullet is
+        // excluded from runChildUpdate, so its update() never runs and it
+        // flies forever without ever being recycled. See GAME-1.
+        const bullet = this.bullets.getFirstDead(false) || this.bullets.create(0, 0);
         if (!bullet) {
-            bullet = new Bullet(this, 0, 0);
-            this.bullets.add(bullet);
+            return;
         }
-        
+
         // Fire bullet from player position to target
         bullet.fire(this.player.x, this.player.y, targetX, targetY);
         
         // Dual shot - fire second bullet with slight offset
         if (this.dualShotActive) {
             this.time.delayedCall(50, () => {
-                let secondBullet = this.bullets.getFirstDead();
+                const secondBullet = this.bullets.getFirstDead(false) || this.bullets.create(0, 0);
                 if (!secondBullet) {
-                    secondBullet = new Bullet(this, 0, 0);
-                    this.bullets.add(secondBullet);
+                    return;
                 }
                 // Slight offset for second bullet
                 const offsetX = Math.random() * 20 - 10;
@@ -823,7 +822,10 @@ export default class GameScene extends Phaser.Scene {
     }
 
     // Unified zombie spawn: picks a position at the screen edge and pools/creates the zombie
-    _spawnZombieOfType(group, ZombieClass, { spawnOffset = 50, spawnInside = false } = {}) {
+    // The zombie class is taken from the group's own classType rather than
+    // passed in: group.create() constructs from classType regardless, so a
+    // separate parameter could silently disagree with what is actually built.
+    _spawnZombieOfType(group, { spawnOffset = 50, spawnInside = false } = {}) {
         const { width, height } = this.cameras.main;
         const camera = this.cameras.main;
 
@@ -861,43 +863,61 @@ export default class GameScene extends Phaser.Scene {
             y = walkablePos.y;
         }
 
-        let zombie = group.getFirstDead();
-        if (!zombie) {
+        // Recycle a deactivated zombie if one is available, otherwise let the
+        // GROUP construct it.
+        //
+        // This used to be `new ZombieClass(...)` followed by `group.add(...)`.
+        // Phaser's Group.add() returns early when the group is at maxSize --
+        // but the constructor has already called scene.add.existing() and
+        // scene.physics.add.existing(), so the zombie ended up rendering,
+        // pathfinding and damaging the player while NOT being a member of the
+        // group. Bullet overlap checks and killAllZombies() both iterate the
+        // group, so such a zombie was permanently invulnerable. See GAME-1.
+        //
+        // group.create() performs the same isFull() check BEFORE constructing
+        // and returns null instead, so the orphan is never built.
+        let zombie = group.getFirstDead(false);
+
+        if (zombie) {
+            zombie.reset(x, y);
+        } else {
             try {
-                zombie = new ZombieClass(this, x, y);
-                group.add(zombie);
+                zombie = group.create(x, y);
             } catch (error) {
-                console.error(`Error creating ${ZombieClass.name}:`, error);
+                console.error(`Error creating ${group.classType && group.classType.name}:`, error);
                 return;
             }
-        } else {
-            zombie.reset(x, y);
+
+            // Group is at maxSize. Skip this spawn rather than creating a
+            // zombie that nothing can ever kill.
+            if (!zombie) {
+                return;
+            }
         }
 
-        // Apply difficulty scaling to freshly created/reset zombie
-        if (this.zombieSpeedMultiplier > 1) {
-            zombie.speed *= this.zombieSpeedMultiplier;
-        }
-        if (this.zombieHpMultiplier > 1) {
-            zombie.maxHealth = Math.ceil(zombie.maxHealth * this.zombieHpMultiplier);
-            zombie.health = zombie.maxHealth;
-        }
+        // Difficulty scaling is DERIVED from the zombie's pristine values, not
+        // multiplied into whatever it currently holds. The old in-place
+        // mutation compounded on every reuse: at level 10 a zombie recycled 20
+        // times reached roughly 1.25^20 times its base speed. See GAME-3.
+        zombie.speed = zombie.baseSpeed * this.zombieSpeedMultiplier;
+        zombie.maxHealth = Math.max(1, Math.ceil(zombie.baseMaxHealth * this.zombieHpMultiplier));
+        zombie.health = zombie.maxHealth;
     }
 
     spawnZombie() {
-        this._spawnZombieOfType(this.zombies, BasicZombie, { spawnOffset: 50 });
+        this._spawnZombieOfType(this.zombies, { spawnOffset: 50 });
     }
 
     spawnTankZombie() {
-        this._spawnZombieOfType(this.tankZombies, TankZombie, { spawnOffset: 80 });
+        this._spawnZombieOfType(this.tankZombies, { spawnOffset: 80 });
     }
 
     spawnFastZombie() {
-        this._spawnZombieOfType(this.fastZombies, FastZombie, { spawnOffset: 60 });
+        this._spawnZombieOfType(this.fastZombies, { spawnOffset: 60 });
     }
 
     spawnAnimatedZombie() {
-        this._spawnZombieOfType(this.animatedZombies, AnimatedZombie, { spawnOffset: 50, spawnInside: true });
+        this._spawnZombieOfType(this.animatedZombies, { spawnOffset: 50, spawnInside: true });
     }
 
     bulletHitZombie(bullet, zombie) {
@@ -907,7 +927,7 @@ export default class GameScene extends Phaser.Scene {
         const zombieDied = zombie.takeDamage(bullet.damage);
         
         // Destroy bullet
-        bullet.destroy();
+        bullet.deactivate();
         
         // If zombie died, it handles its own scoring
     }
@@ -919,7 +939,7 @@ export default class GameScene extends Phaser.Scene {
         const tankZombieDied = tankZombie.takeDamage(bullet.damage);
         
         // Destroy bullet
-        bullet.destroy();
+        bullet.deactivate();
         
         // If tank zombie died, it handles its own scoring
     }
@@ -931,7 +951,7 @@ export default class GameScene extends Phaser.Scene {
         const fastZombieDied = fastZombie.takeDamage(bullet.damage);
         
         // Destroy bullet
-        bullet.destroy();
+        bullet.deactivate();
         
         // If fast zombie died, it handles its own scoring
     }
@@ -943,7 +963,7 @@ export default class GameScene extends Phaser.Scene {
         const animatedZombieDied = animatedZombie.takeDamage(bullet.damage);
         
         // Destroy bullet
-        bullet.destroy();
+        bullet.deactivate();
         
         // If animated zombie died, it handles its own scoring and animation
     }
@@ -1049,15 +1069,19 @@ export default class GameScene extends Phaser.Scene {
     }
     
     spawnPowerUp(x, y, type) {
-        // Get power-up from pool or create new one
-        let powerUp = this.powerUps.getFirstDead();
-        if (!powerUp) {
-            powerUp = new PowerUp(this, x, y, type);
-            this.powerUps.add(powerUp);
-        } else {
-            powerUp.reset(x, y, type);
+        // Same orphan hazard again. Group.create() forwards its third argument
+        // to the constructor's `key` parameter, which for PowerUp is the
+        // power-up type. See GAME-1.
+        const pooled = this.powerUps.getFirstDead(false);
+
+        if (pooled) {
+            pooled.reset(x, y, type);
+            return;
         }
-        
+
+        // Returns null when the group is at maxSize; dropping the power-up is
+        // correct, since an orphan would never be collidable or recycled.
+        this.powerUps.create(x, y, type);
     }
     
     playerPickupPowerUp(player, powerUp) {

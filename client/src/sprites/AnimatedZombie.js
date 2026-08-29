@@ -14,6 +14,13 @@ export default class AnimatedZombie extends Phaser.Physics.Arcade.Sprite {
         this.health = this.maxHealth;
         this.damage = 20; // Higher damage than basic zombie
         this.speed = 75; // Medium speed
+
+        // Pristine values captured before any difficulty scaling. This class is
+        // the only one that pooled correctly before GAME-2 was fixed, which is
+        // precisely why it was the one hit by GAME-3: reset() restored health
+        // but not speed or maxHealth, so multipliers compounded on every reuse.
+        this.baseSpeed = this.speed;
+        this.baseMaxHealth = this.maxHealth;
         this.scoreValue = 50; // Higher points when killed
         this.attackRange = 30; // Distance to damage player
         this.attackCooldown = 1200; // 1.2 seconds between attacks
@@ -371,9 +378,7 @@ export default class AnimatedZombie extends Phaser.Physics.Arcade.Sprite {
             ease: 'Power2',
             onComplete: () => {
                 // For object pooling, don't destroy - just deactivate
-                this.setActive(false);
-                this.setVisible(false);
-                console.log('Animated zombie deactivated for pooling reuse');
+                this.deactivate();
             }
         });
     }
@@ -386,6 +391,11 @@ export default class AnimatedZombie extends Phaser.Physics.Arcade.Sprite {
     // Reset zombie for object pooling
     reset(x, y) {
         this.setPosition(x, y);
+
+        // Restore pristine stats before the scene re-applies difficulty
+        // scaling, otherwise multipliers stack across reuses (GAME-3).
+        this.speed = this.baseSpeed;
+        this.maxHealth = this.baseMaxHealth;
         this.health = this.maxHealth;
         this.isDying = false;
         this.isSpawning = true;
@@ -400,6 +410,9 @@ export default class AnimatedZombie extends Phaser.Physics.Arcade.Sprite {
         // Reactivate for pooling
         this.setActive(true);
         this.setVisible(true);
+        if (this.body) {
+            this.body.enable = true;
+        }
         
         // Cancel any existing tweens to prevent memory leaks
         if (this.scene.tweens) {
@@ -418,6 +431,19 @@ export default class AnimatedZombie extends Phaser.Physics.Arcade.Sprite {
         this.needsSpawnAnimation = true;
     }
     
+    // Standard Phaser pooling: deactivate instead of destroying, so the group
+    // can hand this instance back via getFirstDead(). See GAME-2.
+    deactivate() {
+        this.isActive = false;
+        this.isDying = false;
+        this.setActive(false);
+        this.setVisible(false);
+        if (this.body) {
+            this.setVelocity(0, 0);
+            this.body.enable = false;
+        }
+    }
+
     destroy() {
         this.isActive = false;
         // Clean up event listeners

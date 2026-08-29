@@ -144,10 +144,13 @@ TEST_DATABASE_URL="postgresql://postgres:testpw@localhost:55433/postgres?sslmode
 CI runs all three suites plus lint on every push and pull request, with the
 migration tests always enabled against a Postgres service container.
 
-**What the tests do not cover:** the client suite replaces Phaser with a stub,
-so it cannot catch bugs in the engine's own semantics — group capacity, physics
-and collision behaviour are all outside its reach. A green client suite is not
-evidence that gameplay is correct.
+**What the tests do not cover:** most of the client suite replaces Phaser with a
+stub, so it cannot catch bugs in the engine's own semantics. The exception is
+`test/pooling.test.js`, which loads the real Phaser `Group` under jsdom because
+object-pool capacity behaviour is precisely what it needs to verify. Rendering,
+input and physics integration are still outside the suite's reach, and a full
+`Phaser.Game` cannot boot headless here at all. A green client suite is not by
+itself evidence that gameplay is correct.
 
 ## 📁 Project Structure
 

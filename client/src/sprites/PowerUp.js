@@ -30,7 +30,7 @@ export default class PowerUp extends Phaser.Physics.Arcade.Sprite {
         
         // Start lifetime timer
         this.lifetimeTimer = scene.time.delayedCall(this.lifetime, () => {
-            this.destroy();
+            this.deactivate();
         });
         
         // Add subtle glow/pulse effect
@@ -158,7 +158,7 @@ export default class PowerUp extends Phaser.Physics.Arcade.Sprite {
             duration: 200,
             ease: 'Power2',
             onComplete: () => {
-                this.destroy();
+                this.deactivate();
             }
         });
         
@@ -207,6 +207,9 @@ export default class PowerUp extends Phaser.Physics.Arcade.Sprite {
         this.setAlpha(1);
         this.setVisible(true);
         this.setActive(true);
+        if (this.body) {
+            this.body.enable = true;
+        }
         this.clearTint(); // Clear any existing tint
         this.setAlpha(1.0); // Reset to full opacity
         
@@ -220,20 +223,27 @@ export default class PowerUp extends Phaser.Physics.Arcade.Sprite {
         
         // Start new lifetime timer
         this.lifetimeTimer = this.scene.time.delayedCall(this.lifetime, () => {
-            this.destroy();
+            this.deactivate();
         });
     }
     
-    destroy() {
+    // Return this power-up to the pool.
+    //
+    // Previously named destroy(), which overrode Phaser's destroy() without
+    // calling super -- so power-ups could never be freed. See GAME-2.
+    deactivate() {
         this.isActive = false;
-        
+
         // Clear any pending timers
         if (this.lifetimeTimer) {
             this.lifetimeTimer.destroy();
+            this.lifetimeTimer = null;
         }
-        
-        // Reset to pool (Phaser group will handle this automatically)
+
         this.setActive(false);
         this.setVisible(false);
+        if (this.body) {
+            this.body.enable = false;
+        }
     }
 }
