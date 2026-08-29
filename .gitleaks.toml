@@ -1,0 +1,59 @@
+title = "Banana Pajama secret scanning"
+
+# Extends the stock gitleaks ruleset rather than replacing it, so the ~170
+# built-in provider rules (GitHub PATs, Slack tokens, Stripe keys, JWTs, ...)
+# all stay active. The rules below close gaps that were verified by experiment,
+# not assumed -- see security/gitleaks-selftest/README.md.
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "postgres-uri-password"
+description = "PostgreSQL/Supabase connection URI with an embedded password"
+regex = '''postgres(?:ql)?://[^\s:/@]+:([^\s:/@'"`]{3,})@[^\s/'"`]+'''
+secretGroup = 1
+keywords = ["postgres://", "postgresql://"]
+
+  # Every connection string in the tree is a documentation placeholder. These
+  # patterns are deliberately shape-based rather than a list of the exact
+  # strings that happen to exist today, so a new doc writing
+  # [YOUR-DB-PASSWORD] does not break CI.
+  [[rules.allowlists]]
+  regexTarget = "secret"
+  regexes = [
+    '''(?i)password''',
+    '''(?i)^\[.*\]$''',
+    '''(?i)^<.*>$''',
+    '''^\$\{?[A-Za-z_][A-Za-z0-9_]*\}?$''',
+    '''(?i)^(postgres|postgresql|testpw|test|wrong|changeme|example|secret|localdev|mysecretpassword|user|admin)$''',
+  ]
+
+[[rules]]
+id = "supabase-secret-key"
+description = "Supabase secret API key (sb_secret_...)"
+regex = '''\b(sb_secret_[A-Za-z0-9_-]{16,})'''
+secretGroup = 1
+keywords = ["sb_secret_"]
+
+[[allowlists]]
+description = "Paths that are generated, vendored, or exist to be scanned"
+paths = [
+  '''(^|/)node_modules/''',
+  '''(^|/)dist/''',
+  '''(^|/)package-lock\.json$''',
+  # Fixtures hold deliberately fake secrets. The self-test scans a temp copy of
+  # this directory, where the path no longer matches, so they are still checked.
+  '''^security/gitleaks-selftest/''',
+]
+
+# Phaser animation keys in GameScene.js, e.g. key: 'zombie4-attack'. The stock
+# generic-api-key rule reads any "key: <string>" as a credential and flagged 8
+# of them. Matched on shape rather than on the 8 line numbers, so moving the
+# code does not resurrect the false positives.
+[[allowlists]]
+description = "Phaser animation keys are not credentials"
+regexTarget = "match"
+regexes = [
+  '''key:\s*[`'"]zombie[0-9]+-''',
+]

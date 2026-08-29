@@ -144,6 +144,31 @@ TEST_DATABASE_URL="postgresql://postgres:testpw@localhost:55433/postgres?sslmode
 CI runs all three suites plus lint on every push and pull request, with the
 migration tests always enabled against a Postgres service container.
 
+### Secret scanning
+
+```bash
+./scripts/install-hooks.sh   # once per clone: enables the pre-commit hook
+./scripts/scan-secrets.sh    # scan the full history on demand
+```
+
+Requires `gitleaks` (`brew install gitleaks`). The pre-commit hook **fails
+closed** — if gitleaks is missing it refuses the commit rather than waving it
+through. `./scripts/test-all.sh` skips the scan when gitleaks is absent; CI
+installs a pinned, checksum-verified copy and always runs it.
+
+This is not a stock gitleaks setup, for a specific reason: the credential that
+leaked in this repo's own SEC-1 incident was a Supabase connection string, and
+the **default gitleaks ruleset does not detect that shape** — it reports "no
+leaks found" on the real file. `.gitleaks.toml` adds the missing rules, and
+`security/gitleaks-selftest/` holds fixtures that fail the build if those rules
+ever stop firing. Run `./scripts/scan-secrets.sh --self-test` to check just
+that.
+
+If you need to allowlist a false positive, add the case to
+`security/gitleaks-selftest/must-ignore.txt` in the same change, so the
+exemption is itself tested. If a finding is real: **rotate the secret first**,
+then remove it — deleting the line is not the remediation.
+
 **What the tests do not cover:** most of the client suite replaces Phaser with a
 stub, so it cannot catch bugs in the engine's own semantics. The exception is
 `test/pooling.test.js`, which loads the real Phaser `Group` under jsdom because

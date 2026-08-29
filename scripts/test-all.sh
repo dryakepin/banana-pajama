@@ -51,11 +51,23 @@ run_step "api lint"       npm run lint --prefix api --silent
 run_step "client lint"    npm run lint --prefix client --silent
 run_step "server lint"    npm run lint --prefix server --silent
 
+# Skipped rather than failed when gitleaks is absent, so `test-all` stays
+# runnable on a fresh clone. CI installs gitleaks and always runs this, and the
+# pre-commit hook fails closed -- so a skip here is a convenience, not a hole.
+if command -v gitleaks >/dev/null 2>&1; then
+    run_step "secret scan"   ./scripts/scan-secrets.sh
+else
+    SKIPPED_SECRETS=1
+fi
+
 echo ""
 if [[ ${#FAILED[@]} -eq 0 ]]; then
     echo -e "${GREEN}All checks passed.${NC}"
     if [[ -z "${TEST_DATABASE_URL:-}" ]]; then
         echo "Note: migration integration tests were skipped (TEST_DATABASE_URL not set)."
+    fi
+    if [[ -n "${SKIPPED_SECRETS:-}" ]]; then
+        echo "Note: secret scan was skipped (gitleaks not installed -- brew install gitleaks)."
     fi
     exit 0
 fi

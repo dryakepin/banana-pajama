@@ -1,0 +1,17 @@
+Every EXPECT line below is a FAKE secret that the scanner is required to catch.
+None of these values are or ever were real. If an EXPECT line stops being
+detected, the scanner has regressed and scripts/scan-secrets.sh --self-test
+fails.
+
+The first case is the shape of the credential that actually leaked in SEC-1: a
+Supabase pooler connection string. The stock gitleaks ruleset does NOT detect
+it -- verified, not assumed -- which is why the postgres-uri-password rule in
+.gitleaks.toml exists. Without it this scanner would have missed the one
+incident it is here to prevent.
+
+EXPECT postgres://postgres.qmfyknnldzzpasyp:Xk7mQ2pZ9vLdR4tYwB8s@aws-0-eu-central-1.pooler.supabase.com:5432/postgres
+EXPECT postgresql://postgres:Tr7bQ2xZ9vLdR4tYwB8s@db.qmfyknnldzzpasyp.supabase.co:5432/postgres
+EXPECT DATABASE_URL=postgresql://appuser:Zq4nR8vKdM2pXwT6yB9s@db.example.com:5432/appdb
+EXPECT SUPABASE_SECRET_KEY=sb_secret_Xk7mQ2pZ9vLdR4tYwB8sJfH3cGa1
+EXPECT eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UiLCJpYXQiOjE3MDAwMDAwMDB9.Zq4nR8vKdM2pXwT6yB9sJfH3cGa1QeUiOz5KvNbT
+EXPECT ghp_7Kq2ZmXv9NpLdR4tYwB8sJfH3cGa1QeUiOz5
