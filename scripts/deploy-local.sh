@@ -5,6 +5,17 @@
 
 set -e  # Exit on any error
 
+# This script brings up the FULL local stack, Postgres included. That container
+# sits behind the compose 'local-db' profile, so every compose call below has to
+# activate it -- otherwise `database` is not in the project and commands such as
+# `exec -T database pg_isready` have nothing to talk to.
+#
+# Setting COMPOSE_PROFILES once is deliberate: it reaches every invocation in
+# this file, including the ones that use `-f docker/docker-compose.yml` rather
+# than cd-ing into docker/. Adding --profile to each call site by hand is how
+# the flag went missing in the first place. See INFRA-1 in CODEBASE_REVIEW.md.
+export COMPOSE_PROFILES=local-db
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -194,11 +205,11 @@ main() {
     echo ""
     log_success "🎉 Local development environment is ready!"
     echo ""
-    echo "Quick commands:"
-    echo "  View logs: docker-compose -f docker/docker-compose.yml logs -f"
-    echo "  Stop services: docker-compose -f docker/docker-compose.yml down"
-    echo "  Restart services: docker-compose -f docker/docker-compose.yml restart"
-    echo "  View status: docker-compose -f docker/docker-compose.yml ps"
+    echo "Quick commands (the --profile flag is required, see INFRA-1):"
+    echo "  View logs: docker-compose -f docker/docker-compose.yml --profile local-db logs -f"
+    echo "  Stop services: docker-compose -f docker/docker-compose.yml --profile local-db down"
+    echo "  Restart services: docker-compose -f docker/docker-compose.yml --profile local-db restart"
+    echo "  View status: docker-compose -f docker/docker-compose.yml --profile local-db ps"
     echo ""
     echo "If you encounter issues, check the logs with:"
     echo "  ./scripts/deploy-local.sh logs"

@@ -47,9 +47,11 @@ cd banana-pajama
 # Run the automated setup script
 ./scripts/deploy-local.sh
 
-# Or manually with Docker Compose
+# Or manually with Docker Compose.
+# --profile local-db is required: it starts the Postgres and Adminer
+# containers, and without it compose rejects the file outright.
 cd docker
-docker-compose up -d
+docker-compose --profile local-db up -d
 ```
 
 ### 3. Access the Game
@@ -166,8 +168,8 @@ GET  /health                  // Server health check
 ## 🐳 Docker Deployment
 
 ```bash
-# Build and run with Docker Compose
-docker-compose up --build
+# Build and run with Docker Compose (full local stack, database included)
+docker-compose --profile local-db up --build
 
 # Production deployment
 docker-compose -f docker-compose.prod.yml up -d
@@ -209,7 +211,7 @@ The application supports Supabase as the primary database option alongside local
 # Set DATABASE_URL in .env file or environment
 export DATABASE_URL="postgresql://postgres:[PASSWORD]@[PROJECT].supabase.co:5432/postgres"
 
-# Start server and client (database service not needed)
+# Start server and client only -- no profile, so no local database container
 cd docker
 docker-compose up server client
 ```
