@@ -13,6 +13,10 @@ function setCorsHeaders(req, res) {
     if (ALLOWED_ORIGINS.includes(origin)) {
         res.setHeader('Access-Control-Allow-Origin', origin);
     }
+    // The response body is identical per origin but this header is not, so any
+    // shared cache must key on Origin. Without it a cache can serve one
+    // origin's Allow-Origin value to another. SEC-2.
+    res.setHeader('Vary', 'Origin');
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 }

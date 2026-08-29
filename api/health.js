@@ -4,6 +4,7 @@
  */
 
 const { Pool } = require('pg');
+const { setCorsHeaders, handleOptions } = require('./lib/middleware');
 
 // Create database connection
 function getPool() {
@@ -31,14 +32,13 @@ function getPool() {
 }
 
 module.exports = async (req, res) => {
-    // CORS headers
-    res.setHeader('Access-Control-Allow-Credentials', true);
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    // SEC-2: this handler used to set its own CORS headers, pairing
+    // Allow-Origin: * with Allow-Credentials: true -- a combination browsers
+    // reject outright for credentialed requests. It now shares the one
+    // allowlist in lib/middleware, so there is a single source of CORS truth.
+    setCorsHeaders(req, res);
 
-    if (req.method === 'OPTIONS') {
-        res.status(200).end();
+    if (handleOptions(req, res)) {
         return;
     }
 

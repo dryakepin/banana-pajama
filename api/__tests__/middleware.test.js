@@ -98,6 +98,37 @@ describe('setCorsHeaders', () => {
         expect(res.headers['Access-Control-Allow-Methods']).toBe('GET,POST,OPTIONS');
         expect(res.headers['Access-Control-Allow-Headers']).toBe('Content-Type');
     });
+
+    // SEC-2: the allow-origin value depends on the request's Origin, so a
+    // shared cache that ignores it can hand one origin's value to another.
+    it('sets Vary: Origin so caches cannot cross-serve the origin header', () => {
+        for (const origin of ['https://banana-pajama.vercel.app', 'https://evil.example.com']) {
+            const res = mockRes();
+            setCorsHeaders({ headers: { origin } }, res);
+            expect(res.headers['Vary']).toBe('Origin');
+        }
+    });
+
+    // SEC-2: a wildcard origin combined with credentials is rejected by
+    // browsers outright. api/health.js used to send exactly that pair.
+    it('never emits a wildcard origin or credentials', () => {
+        const res = mockRes();
+        setCorsHeaders({ headers: { origin: 'https://banana-pajama.vercel.app' } }, res);
+        expect(res.headers['Access-Control-Allow-Origin']).not.toBe('*');
+        expect(res.headers['Access-Control-Allow-Credentials']).toBeUndefined();
+    });
+});
+
+// SEC-2: health.js previously set its own CORS headers, so the allowlist in
+// this module was dead code for that route. This asserts it now shares it.
+describe('api/health.js CORS', () => {
+    it('uses the shared allowlist rather than its own wildcard', () => {
+        const source = require('fs').readFileSync(
+            require('path').join(__dirname, '..', 'health.js'), 'utf8');
+        expect(source).toMatch(/setCorsHeaders\(req, res\)/);
+        expect(source).not.toMatch(/setHeader\(\s*'Access-Control-Allow-Origin'/);
+        expect(source).not.toMatch(/setHeader\(\s*'Access-Control-Allow-Credentials'/);
+    });
 });
 
 describe('handleOptions', () => {
