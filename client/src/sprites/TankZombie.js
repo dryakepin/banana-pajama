@@ -14,6 +14,12 @@ export default class TankZombie extends Phaser.Physics.Arcade.Sprite {
         this.health = this.maxHealth;
         this.damage = 25; // Higher damage than basic zombie
         this.speed = 25; // Very slow movement (half of basic zombie)
+
+        // Pristine values captured before any difficulty scaling is applied.
+        // GameScene derives scaled values from these on every spawn, so a
+        // recycled zombie cannot compound multipliers. See GAME-3.
+        this.baseSpeed = this.speed;
+        this.baseMaxHealth = this.maxHealth;
         this.scoreValue = 50; // High points when killed
         this.attackRange = 35; // Slightly larger attack range
         this.attackCooldown = 1200; // Slower attacks (1.2 seconds)
@@ -310,14 +316,26 @@ export default class TankZombie extends Phaser.Physics.Arcade.Sprite {
 
         // Remove after longer delay (tank is bigger, takes longer to disappear)
         this.scene.time.delayedCall(800, () => {
-            this.destroy();
+            this.deactivate();
         });
     }
     
     // Reset tank zombie for object pooling
     reset(x, y) {
         this.setPosition(x, y);
+
+        // Restore pristine stats before the scene re-applies difficulty
+        // scaling, otherwise multipliers stack across reuses (GAME-3).
+        this.speed = this.baseSpeed;
+        this.maxHealth = this.baseMaxHealth;
         this.health = this.maxHealth;
+
+        // Undo deactivate()
+        this.setActive(true);
+        this.setVisible(true);
+        if (this.body) {
+            this.body.enable = true;
+        }
         this.isDead = false;
         this.isActive = true;
         this.isStunned = false;
@@ -332,6 +350,21 @@ export default class TankZombie extends Phaser.Physics.Arcade.Sprite {
         this.lastPathfindTime = 0;
     }
     
+    // Standard Phaser pooling: deactivate instead of destroying, so the group
+    // can hand this instance back via getFirstDead(). Calling destroy() here
+    // (as this class used to) removed the sprite from the group permanently,
+    // which meant reset() below was unreachable and every spawn allocated a
+    // fresh sprite and physics body. See GAME-2 in CODEBASE_REVIEW.md.
+    deactivate() {
+        this.isActive = false;
+        this.setActive(false);
+        this.setVisible(false);
+        if (this.body) {
+            this.setVelocity(0, 0);
+            this.body.enable = false;
+        }
+    }
+
     destroy() {
         this.isActive = false;
         super.destroy();

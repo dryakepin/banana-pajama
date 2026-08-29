@@ -36,6 +36,9 @@ export default class Bullet extends Phaser.Physics.Arcade.Sprite {
         this.setActive(true);
         this.setVisible(true);
         this.active = true;
+        if (this.body) {
+            this.body.enable = true;
+        }
         
         // Calculate direction and set velocity
         const angle = Phaser.Math.Angle.Between(startX, startY, targetX, targetY);
@@ -52,7 +55,7 @@ export default class Bullet extends Phaser.Physics.Arcade.Sprite {
         
         // Check collision with buildings
         if (this.scene.tileMap && !this.scene.tileMap.isWalkable(this.x, this.y)) {
-            this.destroy();
+            this.deactivate();
             return;
         }
         
@@ -65,18 +68,26 @@ export default class Bullet extends Phaser.Physics.Arcade.Sprite {
         
         if (this.x < cameraLeft || this.x > cameraRight || 
             this.y < cameraTop || this.y > cameraBottom) {
-            this.destroy();
+            this.deactivate();
         }
     }
     
-    destroy() {
+    // Return this bullet to the pool.
+    //
+    // This used to be called destroy(), overriding Phaser's own destroy()
+    // WITHOUT calling super -- so a bullet could never actually be freed, not
+    // even on scene shutdown, and the engine's teardown path was silently
+    // broken. Renaming it leaves destroy() to Phaser. See GAME-2.
+    deactivate() {
         this.active = false;
-        
+
         // Stop any movement
         this.setVelocity(0, 0);
-        
-        // Reset to pool (Phaser group will handle this automatically)
+
         this.setActive(false);
         this.setVisible(false);
+        if (this.body) {
+            this.body.enable = false;
+        }
     }
 }
