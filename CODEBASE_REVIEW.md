@@ -1,9 +1,9 @@
 # Codebase Review — Banana Pajama Zombie Shooter
 
-**Date:** 2026-08-28 (revised 2026-08-29 after remediating SEC-1, SEC-4, DB-1, DB-4, DATA-1, INFRA-1, QA-1, GAME-1, GAME-2, GAME-3, GAME-4 and part of CLIENT-4)
+**Date:** 2026-08-28 (revised 2026-08-29 after remediating SEC-1, SEC-2, SEC-4, SEC-7, DB-1, DB-4, DATA-1, INFRA-1, QA-1, GAME-1, GAME-2, GAME-3, GAME-4 and part of CLIENT-4)
 **Reviewed at:** branch `dryakepin/porto` (base `origin/main`, HEAD `46788a1`)
 **Scope:** full repository — client (Phaser), `server/` (Express), `api/` (Vercel functions), `database/`, `docker/`, `nginx/`, `scripts/`, docs
-**Mostly analysis.** Findings are analysis only except SEC-1, SEC-4, DB-1, DB-4, DATA-1, INFRA-1, QA-1, GAME-1, GAME-2, GAME-3, GAME-4 and CLIENT-4, whose remediations are recorded inline below.
+**Mostly analysis.** Findings are analysis only except SEC-1, SEC-2, SEC-4, SEC-7, DB-1, DB-4, DATA-1, INFRA-1, QA-1, GAME-1, GAME-2, GAME-3, GAME-4 and CLIENT-4, whose remediations are recorded inline below.
 
 ---
 
@@ -19,7 +19,7 @@ Headline items:
 - ~~**A gameplay bug produces invulnerable zombies.**~~ Once a zombie group hit its `maxSize`, new zombies were created into the scene but silently rejected from the group, so bullets passed through them forever. **Fixed 2026-08-29 — see GAME-1.**
 - ~~**Zero tests**, no lint config, and both `npm test` and `npm run lint` are documented but non-functional.~~ **Fixed 2026-08-29 — 113 tests, lint and CI; see QA-1.**
 
-Counts: **6 critical (P0)** — 6 resolved — **11 high (P1)** — 1 resolved — **16 medium (P2)** — 3 resolved, 1 partial — **11 low (P3)**.
+Counts: **6 critical (P0)** — 6 resolved — **11 high (P1)** — 3 resolved — **16 medium (P2)** — 3 resolved, 1 partial — **11 low (P3)**.
 
 ### Severity legend
 
@@ -396,12 +396,39 @@ This is not cosmetic — the two paths have **different security postures**:
 
 **Fix:** Delete one. Given the deployment is Vercel, the serverless functions are the natural survivor — but they need helmet-equivalent headers added first. Whichever you keep, delete the other and the now-dead `api/index.js` shim.
 
-### SEC-2 · `vercel.json` wildcard CORS overrides the code's origin allowlist
+### SEC-2 · `vercel.json` wildcard CORS overrides the code's origin allowlist — ✅ RESOLVED 2026-08-29
 **`vercel.json:42-57` vs `api/lib/middleware.js:5-18`**
 
 `api/lib/middleware.js` carefully allowlists three origins. `vercel.json` then unconditionally attaches `Access-Control-Allow-Origin: *` to every `/api/*` response. The allowlist is dead code at best; at worst the two produce duplicate/conflicting `Access-Control-Allow-Origin` headers, which browsers reject outright.
 
 **Fix:** Remove the CORS block from `vercel.json` and let the handlers own it. Add `Vary: Origin` so caches don't cross-serve.
+
+#### Resolution (2026-08-29)
+
+**There were three sources of CORS headers, not two.** `api/health.js:35-38` set
+its own, and live production returned `Access-Control-Allow-Methods: GET,OPTIONS`
+— a value that appears in neither `vercel.json` nor `api/lib/middleware.js`, which
+is what gave the third one away.
+
+Worse, `health.js` paired `Access-Control-Allow-Origin: *` with
+`Access-Control-Allow-Credentials: true`. Browsers reject that combination
+outright for credentialed requests, so the header was not merely permissive, it
+was invalid.
+
+Three changes:
+
+1. The `/api/(.*)` CORS block is gone from `vercel.json`.
+2. `api/health.js` now calls the shared `setCorsHeaders`/`handleOptions`, so the
+   allowlist in `lib/middleware.js` is the single source of CORS truth.
+3. `setCorsHeaders` now sets `Vary: Origin`.
+
+**No risk to the game itself:** all three client fetches use relative paths
+(`/api/highscores`), so they are same-origin and CORS never applied to them. The
+allowlist only ever governed genuine cross-origin callers.
+
+Also noted while verifying: `banana-pajama-zombie-shooter.vercel.app` returns
+**500** on `/api/health`, while `banana-pajama.vercel.app` returns 200. Two
+deployed projects, one broken — related to ARCH-1 and untouched here.
 
 ### SEC-3 · TLS certificate verification disabled on every database connection
 **`api/lib/db.js:21-23`, `api/health.js:24-26`, `server/config/database.js:23, 48`, `scripts/migrate-supabase.js:30, 41`**
@@ -453,12 +480,51 @@ For a hobby leaderboard this may be an acceptable risk, but it should be a *deci
 
 **Fix (proportionate options, cheapest first):** (a) require the `session_id` from `/api/sessions/start` and validate `score`/`time` against the server-recorded session duration; (b) add a plausibility rule (`score <= survival_time * 30 + zombies_killed * 60`); (c) HMAC the payload with a build-time secret. None of these stop a determined attacker, but they stop `curl`.
 
-### SEC-7 · No security headers on the deployed client
+### SEC-7 · No security headers on the deployed client — ✅ RESOLVED 2026-08-29
 **`vercel.json:23-58`**
 
 The Vercel deployment sets only `Cache-Control` and CORS headers. There is no CSP, no `X-Content-Type-Options`, no `Referrer-Policy`, no HSTS. A perfectly good CSP exists in `nginx/production.conf:38` — but nginx is not part of the Vercel deployment path, so it protects nothing.
 
 **Fix:** Port the header block from `nginx/production.conf` into `vercel.json`'s `headers` for `/(.*)`.
+
+#### Resolution (2026-08-29)
+
+**Following that fix verbatim would have shipped a completely broken game.**
+
+The CSP in `nginx/production.conf` has `img-src 'self' data: https:` — no
+`blob:`. Phaser decodes every texture by fetching it as a blob and handing
+`URL.createObjectURL()` to an `Image`. Serving the real build behind the real
+header block and driving the game in a browser:
+
+| | Textures loaded | CSP violations |
+|---|---|---|
+| nginx CSP as written | **0 of 57** (`banana`, `zombie1-4`, tiles, power-ups all missing) | 59, all `img-src` blocked `blob:` |
+| With `blob:` added | 57 | 0 |
+
+The loader reported `progress: 1` in both cases. Nothing errored. The failure
+mode is a running game rendering nothing — which is also why the broken CSP in
+`nginx/production.conf` was never noticed: per ARCH-4 those configs serve no
+traffic.
+
+Shipped headers on `/(.*)`: `Content-Security-Policy` (with `blob:`),
+`X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`,
+`Referrer-Policy: strict-origin-when-cross-origin`.
+
+Two deliberate departures from the nginx block:
+
+- **HSTS omitted.** The finding says there is none, but Vercel already sends
+  `max-age=63072000; includeSubDomains; preload`. Porting nginx's
+  `max-age=31536000` without `preload` would have *weakened* it.
+- **`X-XSS-Protection` omitted.** It is deprecated and removed from every
+  modern browser; the legacy auditor it enabled had its own injection vectors.
+
+`client/test/deploy-headers.test.js` (11 tests) asserts the shipped
+`vercel.json` against what the game actually needs, so the `blob:` clause cannot
+be dropped by a future tidy-up without a red build.
+
+`'unsafe-inline'` and `'unsafe-eval'` in `script-src` are kept from the nginx
+policy and left as-is; tightening them needs its own verification pass and is
+not part of this change.
 
 ### DB-2 · `game_sessions.session_id` has no uniqueness constraint
 **`database/init.sql:25-37`, `database/init-supabase.sql:21-33`, `server/index.js:97-111`**
