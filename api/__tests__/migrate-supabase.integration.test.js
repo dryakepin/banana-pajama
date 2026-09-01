@@ -34,7 +34,7 @@ const describeIfDb = TEST_DATABASE_URL ? describe : describe.skip;
 function runMigration(databaseUrl = TEST_DATABASE_URL) {
     try {
         const stdout = execFileSync('node', [MIGRATE_SCRIPT], {
-            env: { ...process.env, DATABASE_URL: databaseUrl, NODE_PATH: path.join(REPO_ROOT, 'server', 'node_modules') },
+            env: { ...process.env, DATABASE_URL: databaseUrl, NODE_PATH: path.join(REPO_ROOT, 'api', 'node_modules') },
             encoding: 'utf8',
             stdio: ['ignore', 'pipe', 'pipe'],
         });

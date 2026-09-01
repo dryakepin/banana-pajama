@@ -1,9 +1,9 @@
 # Codebase Review — Banana Pajama Zombie Shooter
 
-**Date:** 2026-08-28 (revised 2026-08-29 after remediating SEC-1, SEC-2, SEC-4, SEC-7, DB-1, DB-4, DATA-1, INFRA-1, QA-1, GAME-1, GAME-2, GAME-3, GAME-4 and part of CLIENT-4)
+**Date:** 2026-08-28 (revised 2026-09-01 after remediating ARCH-1, SEC-1, SEC-2, SEC-4, SEC-7, DB-1, DB-4, DATA-1, INFRA-1, QA-1, GAME-1, GAME-2, GAME-3, GAME-4 and part of CLIENT-4)
 **Reviewed at:** branch `dryakepin/porto` (base `origin/main`, HEAD `46788a1`)
 **Scope:** full repository — client (Phaser), `server/` (Express), `api/` (Vercel functions), `database/`, `docker/`, `nginx/`, `scripts/`, docs
-**Mostly analysis.** Findings are analysis only except SEC-1, SEC-2, SEC-4, SEC-7, DB-1, DB-4, DATA-1, INFRA-1, QA-1, GAME-1, GAME-2, GAME-3, GAME-4 and CLIENT-4, whose remediations are recorded inline below.
+**Mostly analysis.** Findings are analysis only except ARCH-1, SEC-1, SEC-2, SEC-4, SEC-7, DB-1, DB-4, DATA-1, INFRA-1, QA-1, GAME-1, GAME-2, GAME-3, GAME-4 and CLIENT-4, whose remediations are recorded inline below.
 
 ---
 
@@ -19,12 +19,12 @@ Headline items:
 - ~~**A gameplay bug produces invulnerable zombies.**~~ Once a zombie group hit its `maxSize`, new zombies were created into the scene but silently rejected from the group, so bullets passed through them forever. **Fixed 2026-08-29 — see GAME-1.**
 - ~~**Zero tests**, no lint config, and both `npm test` and `npm run lint` are documented but non-functional.~~ **Fixed 2026-08-29 — 113 tests, lint and CI; see QA-1.**
 
-Counts: **47 findings** — 13 resolved, 1 partial.
+Counts: **47 findings** — 14 resolved, 1 partial.
 
 | Severity | Total | Resolved |
 |---|---|---|
 | P0 critical | 6 | **6** |
-| P1 high | 12 | 4 |
+| P1 high | 12 | 5 |
 | P2 medium | 17 | 3 (+1 partial) |
 | P3 low | 12 | 0 |
 
@@ -379,7 +379,7 @@ That safety is incidental rather than designed, and it is one exported variable 
 
 ## P1 — High
 
-### ARCH-1 · Two parallel backend implementations; which one serves a request is unknowable from the code
+### ARCH-1 · Two parallel backend implementations; which one serves a request is unknowable from the code — ✅ RESOLVED 2026-09-01
 **`server/index.js` vs `api/highscores.js` / `api/sessions.js` / `api/health.js`, routed by `vercel.json:13-22`**
 
 Every endpoint exists twice:
@@ -404,6 +404,83 @@ This is not cosmetic — the two paths have **different security postures**:
 | SSL verify | disabled for Supabase | disabled for Supabase |
 
 **Fix:** Delete one. Given the deployment is Vercel, the serverless functions are the natural survivor — but they need helmet-equivalent headers added first. Whichever you keep, delete the other and the now-dead `api/index.js` shim.
+
+#### Resolution (2026-09-01)
+
+**The split was confirmed against live production before deleting anything.**
+`server/index.js` uses `helmet()`; the serverless functions do not. Probing each
+route read-only and counting helmet-only headers:
+
+| Route | Helmet headers | Served by |
+|---|---|---|
+| `/api/health` | 0 | serverless function |
+| `/api/highscores` | 0 | serverless function |
+| `/api/sessions/start` | 3 | **Express** |
+| `/api/init-db` | 3 | **Express** |
+| any unmatched `/api/*` | 3 | **Express** |
+
+Exactly the behaviour the finding predicted, and exactly the reason it matters:
+the two routes the game actually calls ran on one stack while everything else
+ran on another with different CORS, rate limiting and pooling.
+
+The serverless functions survived. `server/` is deleted — the Express app, its
+`Dockerfile`, `config/`, `healthcheck.js`, and the empty `routes/`, `models/`,
+`middleware/` scaffolding from CODE-1.
+
+The precondition in the fix above ("they need helmet-equivalent headers added
+first") was already met: SEC-7 added CSP, `X-Content-Type-Options`,
+`X-Frame-Options` and `Referrer-Policy` for `/(.*)` in `vercel.json`, which
+covers `/api/*` too.
+
+**Local development still works, without a second implementation.** The compose
+stack used to build `server/` and nginx proxied `/api/` to it. It now builds
+`docker/api.Dockerfile`, which runs `scripts/dev-api-server.js` — an adapter
+containing no route logic. It maps a URL to the same `api/*.js` module Vercel
+invokes and supplies the request/response sugar the Vercel runtime adds
+(`req.query`, `req.body`, `res.status().json()`). A handler change is picked up
+for free; there is nothing left to drift.
+
+Two things improved as side effects rather than by design:
+
+- **`/api/sessions/{start,end}` now work on the serverless path.** `api/sessions.js`
+  already handled both subpaths by inspecting `req.url`, but Vercel's filesystem
+  routing only maps it to `/api/sessions`, so the subpaths had always fallen
+  through to Express. A `/api/sessions/(.*)` rewrite makes it reachable. (The
+  feature remains unused by the client — ARCH-2 is still open.)
+- **Most of DEP-1 is gone.** All six production advisories lived in
+  `server/package.json` (`express` → `path-to-regexp`, `qs`, `morgan`, `uuid`).
+  `api/package.json` depends on `pg` alone. `vercel.json` no longer installs the
+  Express stack at build time either.
+
+`api/index.js` is no longer the Express shim; it is a JSON 404, so an unknown
+`/api` path still gets an API-shaped response instead of falling through the SPA
+rewrite and being handed `index.html`.
+
+**Also closes the footgun flagged under INFRA-1.** The old compose service set
+`DATABASE_URL: ${DATABASE_URL:-}` and bind-mounted `../server:/app`, putting real
+Supabase credentials inside the "local" container and leaving it one exported
+shell variable away from a "local" stack silently talking to production. The new
+service hard-codes a literal local connection string and mounts no source, so the
+surrounding environment cannot redirect it.
+
+Verified end to end against the running local stack — `/health`,
+`/api/health` (database connected), `GET` and `POST /api/highscores`,
+`/api/sessions/start` and `/end`, validation rejection, method rejection, and a
+JSON 404 for an unknown path — both directly and through nginx, which is the
+path the game uses. `GET /api/highscores` returned the local seed row
+(`ZombieSlayer`, 200) rather than production's top score, confirming the
+isolation above.
+
+The migration integration tests moved from `server/__tests__/` to
+`api/__tests__/`; the CI `server` job folded into `api`, which now carries the
+Postgres service container. `scripts/migrate-supabase.js` needs `dotenv`, which
+had been provided by `server/package.json`, so it is now an `api` devDependency.
+
+**Still open:** ARCH-2 (the session endpoints remain unused by the client) and
+`POST /api/init-db`, which existed only in Express and is gone —
+`scripts/migrate-supabase.js` has been the supported provisioning path since DB-1.
+Stale references to `server/` remain in `SUPABASE_MIGRATION_PLAN.md` and
+`docs/VERCEL_DEBUGGING.md`; those are historical documents covered by DOC-1/DOC-2.
 
 ### SEC-2 · `vercel.json` wildcard CORS overrides the code's origin allowlist — ✅ RESOLVED 2026-08-29
 **`vercel.json:42-57` vs `api/lib/middleware.js:5-18`**

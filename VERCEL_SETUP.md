@@ -73,7 +73,6 @@ DATABASE_URL="<your Supabase connection string>" node scripts/migrate-supabase.j
 ```bash
 # 1. Install dependencies
 cd client && npm install
-cd ../server && npm install
 cd ../api && npm install
 cd ..
 

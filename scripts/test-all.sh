@@ -7,7 +7,7 @@
 # (vercel.json pins framework: null with an explicit buildCommand). A shell
 # script gets the same one-command convenience with no deployment risk.
 #
-# The migration tests in server/ need a real PostgreSQL and are skipped unless
+# The migration tests in api/ need a real PostgreSQL and are skipped unless
 # TEST_DATABASE_URL is set. To include them:
 #
 #   docker run -d --name bp-test -e POSTGRES_PASSWORD=testpw -p 55433:5432 postgres:15
@@ -37,7 +37,7 @@ run_step() {
     fi
 }
 
-for workspace in api client server; do
+for workspace in api client; do
     if [[ ! -d "$workspace/node_modules" ]]; then
         echo -e "${BLUE}==> installing $workspace dependencies${NC}"
         npm install --prefix "$workspace" --silent
@@ -46,10 +46,8 @@ done
 
 run_step "api tests"      npm test --prefix api --silent
 run_step "client tests"   npm test --prefix client --silent
-run_step "server tests"   npm test --prefix server --silent
 run_step "api lint"       npm run lint --prefix api --silent
 run_step "client lint"    npm run lint --prefix client --silent
-run_step "server lint"    npm run lint --prefix server --silent
 
 # Skipped rather than failed when gitleaks is absent, so `test-all` stays
 # runnable on a fresh clone. CI installs gitleaks and always runs this, and the
