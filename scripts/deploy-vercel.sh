@@ -59,7 +59,6 @@ echo ""
 
 # --- Install dependencies ---
 echo "=== Installing dependencies ==="
-npm install --prefix server --silent
 npm install --prefix client --silent
 echo "  Done."
 echo ""

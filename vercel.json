@@ -1,9 +1,9 @@
 {
   "version": 2,
-  "buildCommand": "npm install --prefix server && npm install --prefix client && npm run build --prefix client",
+  "buildCommand": "npm install --prefix client && npm run build --prefix client",
   "outputDirectory": "client/dist",
   "devCommand": "npm run dev --prefix client",
-  "installCommand": "npm install --prefix server && npm install --prefix client",
+  "installCommand": "npm install --prefix client",
   "framework": null,
   "functions": {
     "api/*.js": {
@@ -11,6 +11,10 @@
     }
   },
   "rewrites": [
+    {
+      "source": "/api/sessions/(.*)",
+      "destination": "/api/sessions"
+    },
     {
       "source": "/api/(.*)",
       "destination": "/api"

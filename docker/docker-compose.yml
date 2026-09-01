@@ -28,58 +28,48 @@ services:
     networks:
       - banana_pajama_network
 
-  # Node.js API Server
-  server:
+  # API server -- runs the same api/ handlers that Vercel deploys.
+  #
+  # ARCH-1: this used to build server/, a second complete Express backend. That
+  # is gone. scripts/dev-api-server.js is an adapter over the api/*.js handler
+  # modules, so there is one implementation of every endpoint.
+  api:
     build:
-      context: ../server
-      dockerfile: Dockerfile
-    container_name: banana_pajama_server
+      context: ..
+      dockerfile: docker/api.Dockerfile
+    container_name: banana_pajama_api
     restart: unless-stopped
     environment:
       NODE_ENV: development
       PORT: 3000
-      # Database configuration - supports multiple providers:
-      # - Local Docker: Set DB_HOST=database (default)
-      # - Supabase: Set DATABASE_URL or DB_PROVIDER=supabase with Supabase credentials
-      DB_HOST: ${DB_HOST:-database}
-      DB_PORT: ${DB_PORT:-5432}
-      DB_NAME: ${DB_NAME:-banana_pajama}
-      DB_USER: ${DB_USER:-postgres}
-      DB_PASSWORD: ${DB_PASSWORD:-banana_dev_password}
-      DATABASE_URL: ${DATABASE_URL:-}
-      DB_PROVIDER: ${DB_PROVIDER:-}
-      USE_CONNECTION_POOLING: ${USE_CONNECTION_POOLING:-false}
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8080}
-      SESSION_SECRET: ${SESSION_SECRET:-dev_session_secret_change_in_production}
-    volumes:
-      # Mount source code for development hot reload
-      - ../server:/app
-      - /app/node_modules
+      # Deliberately a literal, not ${DATABASE_URL:-...}. The review noted that
+      # the old setup was "one exported variable away" from a developer's shell
+      # DATABASE_URL silently pointing the local stack at production. Hard-coding
+      # the local service removes that entirely: `docker compose` cannot be
+      # redirected at production by the surrounding environment.
+      #
+      # sslmode=disable because api/lib/db.js requests verified TLS for any
+      # non-Supabase host, and the local postgres container serves plaintext.
+      DATABASE_URL: postgresql://postgres:banana_dev_password@database:5432/banana_pajama?sslmode=disable
     ports:
       - "3000:3000"
-    # Database dependency - only needed for local Docker database
-    # When using Supabase, start without local-db profile:
-    #   docker-compose up server client
-    # When using local database, start with profile:
-    #   docker-compose --profile local-db up
-    #
     # required: false is load-bearing. `database` sits behind the local-db
     # profile, so without the profile it is not part of the project at all and
     # an unconditional depends_on makes compose reject the whole file:
-    #   service "server" depends on undefined service "database"
+    #   service "api" depends on undefined service "database"
     # That broke every compose command, profile or not. With required: false
     # the dependency still gates startup when the profile IS active, and is
-    # simply ignored when it is not. See INFRA-1 in CODEBASE_REVIEW.md.
+    # ignored when it is not. See INFRA-1.
     depends_on:
       database:
         condition: service_healthy
         required: false
     healthcheck:
-      test: ["CMD", "node", "healthcheck.js"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 30s
+      start_period: 10s
     networks:
       - banana_pajama_network
 
@@ -93,7 +83,7 @@ services:
     ports:
       - "8080:80"
     depends_on:
-      server:
+      api:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]

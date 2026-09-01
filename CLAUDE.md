@@ -51,18 +51,30 @@ client/
 ```
 
 ### Backend (IMPLEMENTED)
-- **Server**: Express.js 4.18.2 with comprehensive middleware
-- **Database**: PostgreSQL 15 with connection pooling
-- **Security**: Helmet, CORS, rate limiting (100 req/15min)
-- **Monitoring**: Morgan logging, health checks
+- **Runtime**: Vercel serverless functions (one module per endpoint)
+- **Database**: PostgreSQL via Supabase, `pg` pool per invocation
+- **Security**: origin allowlist in `api/lib/middleware.js`; security headers
+  in `vercel.json` (see SEC-2/SEC-7)
 
-**Server Structure**:
+There is exactly one backend. An Express app in `server/` used to duplicate
+every endpoint below, with Vercel's routing deciding which answered — see
+ARCH-1 in `CODEBASE_REVIEW.md`. It was deleted 2026-09-01.
+
+**Backend Structure**:
 ```
-server/
-├── index.js           - Main server (312 lines)
-├── package.json       - Dependencies
-└── (inline routes)    - All endpoints in main file
+api/
+├── health.js          - GET  /api/health
+├── highscores.js      - GET/POST /api/highscores
+├── sessions.js        - POST /api/sessions/{start,end}
+├── index.js           - JSON 404 for unmatched /api paths
+└── lib/
+    ├── db.js          - pool factory
+    └── middleware.js  - CORS allowlist, rate limit, validation
 ```
+
+Local development runs these same handler modules behind
+`scripts/dev-api-server.js`, a thin adapter, so local and production cannot
+drift apart.
 
 **Implemented API Endpoints**:
 ```
@@ -189,7 +201,7 @@ Features: 30s lifetime, visual countdown, pulse effects, object pooling
 
 **Base URL**: `http://localhost:3000` (local) or AWS ALB endpoint (production)
 
-**Implemented in**: `server/index.js` (312 lines)
+**Implemented in**: `api/*.js` (one module per endpoint)
 
 ### Endpoints
 
